@@ -5,14 +5,13 @@
 // Usage: node harness/acceptance.ts
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import {
   bytesToHex,
   createPublicClient,
   erc20Abi,
   createTestClient,
   http,
-  keccak256,
   parseAbi,
   parseUnits,
   type Address,
@@ -151,27 +150,24 @@ async function main() {
   await step('1-2 deploy factory and registry, delegate testtld on Handshake', async () => {
     const deployed = await sdk.deployFactory(operator, usdc);
     factory = deployed.factory;
-    const code = async (a: Address) => (await publicClient.getCode({ address: a })) as Hex;
-    manifest = {
-      release: 'local-acceptance',
-      protocolVersion: 1,
-      sourceCommit: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim(),
-      compiler: { solc: '0.8.30', evmVersion: 'cancun', optimizerRuns: 200, bytecodeHash: 'none', cborMetadata: false },
-      chains: {
-        '31337': {
-          name: 'anvil',
-          factory,
-          factoryCodeHash: keccak256(await code(factory)),
-          implementation: deployed.implementation,
-          implementationCodeHash: keccak256(await code(deployed.implementation)),
-          paymentToken: usdc,
-          paymentTokenDecimals: 6,
-        },
-      },
-    };
+    await settle();
+    // The manifest comes from an independent rebuild of the committed source,
+    // compared byte for byte with what was just deployed, not from the
+    // deployed code itself. Uncommitted source changes make this fail.
     const manifestPath = new URL('manifest.local.json', RUN_DIR);
-    writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+    rmSync(manifestPath, { force: true });
+    const verified = spawnSync(
+      'node',
+      ['scripts/verify-release.ts', '--rpc', ANVIL_URL, '--factory', factory, '--name', 'anvil', '--block', 'safe',
+        '--write-manifest', manifestPath.pathname],
+      { cwd: ROOT, encoding: 'utf8' },
+    );
+    assert.equal(verified.status, 0, `release verification failed: ${verified.stdout}${verified.stderr}`);
+    const report = JSON.parse(verified.stdout);
+    assert.equal(report.implementationMatches, true);
+    assert.equal(report.factoryMatchesOutsideImmutables, true);
     manifest = loadManifest(manifestPath);
+    assert.equal(manifest.chains['31337'].implementation, deployed.implementation);
     ({ registry } = await sdk.deployRegistry(operator, factory, {
       tld: 'testtld',
       admin: operator.account.address,

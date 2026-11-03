@@ -45,7 +45,16 @@ npm run test:ts                                   # resolver unit tests
 docker build -t pirate-registry-hnsd:v2.0.0-regtest harness/hnsd
 node harness/acceptance.ts                        # SPEC 11.1, about five seconds
 node packages/sdk/src/cli.ts --help
+node scripts/verify-release.ts --rpc URL --factory ADDR   # rebuild-and-hash check
 ```
+
+`scripts/verify-release.ts` rebuilds the committed source (via `git archive`,
+with submodules checked against the commit's gitlinks) using the pinned solc
+settings and compares it byte for byte with the deployed implementation and
+factory; only the factory's two immutable slots may differ, and they must hold
+the implementation and payment-token addresses. It writes the manifest entry
+only on success. Acceptance uses it to produce its local manifest, so the run
+fails if the deployed code is not reproducible from the committed source.
 
 The acceptance script starts its own anvil (one slot per epoch, so `safe`
 trails by one block), an in-memory hsd 8.0.0 regtest node and hnsd v2.0.0 in
