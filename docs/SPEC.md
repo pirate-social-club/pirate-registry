@@ -1,8 +1,10 @@
 # PIRATE Registry V1: normative specification
 
-Status: unratified draft, revision 2, 2026-11-03. Decisions D1 to D4 are recommended by
-both review rounds and await workspace_owner ratification. Nothing here is
-implemented, deployed or registered with the control plane.
+Status: implementation baseline, revision 2, 2026-11-03. The workspace_owner
+gave the go-ahead to start implementation on 2026-11-03, which adopts D1 to
+D3; D4 follows from spec 014. Implementation is in progress under the
+control plane's `experiments/pirate-registry`; it is not yet a registered
+repository.
 
 The key words MUST, MUST NOT, SHOULD and MAY are used as in RFC 2119.
 
@@ -34,9 +36,9 @@ token ID. Year means 365 days of block timestamps.
 
 | ID | Decision | Status |
 |---|---|---|
-| D1 | Chain is Base (8453), with Base Sepolia (84532) for testing. The chain ID is explicit in the delegation record. | Recommended, owner-open |
-| D2 | A registration's annual price is fixed for the life of its generation, through transfers and grace. | Recommended, owner-open |
-| D3 | The registry receives payments. A separate, permissionless `sweep()` forwards the balance to the treasury. | Recommended, owner-open |
+| D1 | Chain is Base (8453), with Base Sepolia (84532) for testing. The chain ID is explicit in the delegation record. | Adopted 2026-11-03 |
+| D2 | A registration's annual price is fixed for the life of its generation, through transfers and grace. | Adopted 2026-11-03 |
+| D3 | The registry receives payments. A separate, permissionless `sweep()` forwards the balance to the treasury. | Adopted 2026-11-03 |
 | D4 | `.pirate` is excluded until a separately ratified migration preserves existing persona ownership (spec 014, 2026-08-24 amendment). 8s28 and a18n are excluded because PIRATE renewal freezes their zones. | Required by spec 014 |
 
 Shared OP Stack ancestry does not make Base's sequencing, upgrade controls or
@@ -543,7 +545,10 @@ cannot resolve these names until the adapter ships.
 
 ## 14. Open items
 
-D1 to D3 need owner ratification. The ceremony network is owner-open. The
+The ceremony network is Base Sepolia. On 2026-11-03 two samples of Base
+Sepolia's safe head showed lags of about 41 minutes (by block count) and 4
+minutes (by timestamp), so the 15-minute `safe` freshness default may fail
+intermittently and must be measured in the harness. The
 harness must still prove that hsd accepts an `_evm` NS target and that hnsd,
 built for regtest, returns it. Whether the chosen RPC providers honour
 `requireCanonical` must be checked before the ceremony.
