@@ -21,7 +21,7 @@
   },
   "hnsdHeightDuringCeremony": {
     "value": 354180,
-    "evidence": "hnsd reached 354180 at 2026-11-03T13:25:30Z and logged no new height or restart before 2026-11-03T13:35:00Z; the ceremony ran from 13:26:50Z to 13:30:46Z, with resolves at 13:28:00Z and 13:30:46Z"
+    "evidence": "hnsd logged height 354180 at 2026-11-03T13:25:30.294Z and its next height, 354181, at 2026-11-03T13:31:24.332Z, with no restart in between; the ceremony ran from 13:26:50Z to 13:30:46Z, with resolves at 13:28:00Z and 13:30:46Z, so hnsd was at 354180 throughout"
   },
   "evm": {
     "chainId": 84532,
