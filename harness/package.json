@@ -1,0 +1,9 @@
+{
+  "name": "pirate-registry-harness",
+  "private": true,
+  "type": "module",
+  "description": "Local acceptance harness: hsd regtest, hnsd regtest and anvil.",
+  "dependencies": {
+    "hsd": "8.0.0"
+  }
+}

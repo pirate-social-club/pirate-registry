@@ -24,13 +24,36 @@ a18n are excluded.
 - `src/RegistryFactory.sol`: ownerless factory that deploys and initializes clones.
 - `src/Labels.sol`, `src/RecordKeys.sol`: label rules and record-key derivation.
 - `test/`: Foundry tests, including a mock USDC with blacklist and pause.
+- `packages/resolver/`: the independent resolver (Handshake delegation from
+  hsd or hnsd, manifest verification, reads pinned to one block hash with
+  `requireCanonical`) and its unit tests.
+- `packages/sdk/`: operator and buyer transactions and the `pirate-registry` CLI.
+- `harness/`: local acceptance (anvil, hsd regtest, hnsd in Docker).
 - `script/Deploy.s.sol`: `DeployFactory` (pinned native USDC on Base and Base
   Sepolia, a mock on local anvil) and `DeployRegistry`, which prints the
   `_evm` delegation record to publish on the TLD.
 
 ## Local tests
 
-Requires Foundry (`foundryup`). From this directory:
+Contracts need Foundry (`foundryup`). The resolver, SDK, CLI and acceptance
+harness need Node 24 (TypeScript runs natively) and Docker for hnsd.
+
+```
+npm install
+npm run typecheck
+npm run test:ts                                   # resolver unit tests
+docker build -t pirate-registry-hnsd:v2.0.0-regtest harness/hnsd
+node harness/acceptance.ts                        # SPEC 11.1, about five seconds
+node packages/sdk/src/cli.ts --help
+```
+
+The acceptance script starts its own anvil (one slot per epoch, so `safe`
+trails by one block), an in-memory hsd 8.0.0 regtest node and hnsd v2.0.0 in
+Docker, and stops them when it finishes. It writes `harness/.run/` (ignored).
+Because it moves anvil's clock forward a year, it passes the chain time as the
+resolver's `--now` override, which the output reports as `clock: "override"`.
+
+Contract tests, from this directory:
 
 ```
 forge build

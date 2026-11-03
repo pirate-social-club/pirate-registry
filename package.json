@@ -1,0 +1,17 @@
+{
+  "name": "pirate-registry",
+  "private": true,
+  "type": "module",
+  "workspaces": ["packages/resolver", "packages/sdk", "harness"],
+  "scripts": {
+    "gen:abi": "node scripts/gen-abi.mjs",
+    "typecheck": "tsc -p tsconfig.json",
+    "test:ts": "node --test packages/resolver/test/*.test.ts",
+    "acceptance": "node harness/acceptance.ts"
+  },
+  "devDependencies": {
+    "@types/dns-packet": "5.6.5",
+    "@types/node": "24.19.2",
+    "typescript": "7.0.2"
+  }
+}

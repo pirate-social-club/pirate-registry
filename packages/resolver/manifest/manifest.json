@@ -1,0 +1,7 @@
+{
+  "release": "unreleased",
+  "protocolVersion": 1,
+  "sourceCommit": "",
+  "compiler": { "solc": "0.8.30", "evmVersion": "cancun", "optimizerRuns": 200, "bytecodeHash": "none", "cborMetadata": false },
+  "chains": {}
+}

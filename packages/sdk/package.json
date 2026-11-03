@@ -1,0 +1,13 @@
+{
+  "name": "@pirate-registry/sdk",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Operator and buyer transactions plus the pirate-registry CLI.",
+  "exports": { ".": "./src/index.ts" },
+  "bin": { "pirate-registry": "./src/cli.ts" },
+  "dependencies": {
+    "@pirate-registry/resolver": "0.1.0",
+    "viem": "2.57.15"
+  }
+}

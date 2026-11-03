@@ -100,7 +100,10 @@ Example: `0x5fbdb2315678afecb367f032d93f642f64180aa3.8453._evm.`
 Publishing a lone `_evm` NS record means DNS resolvers without `_evm` support
 cannot resolve names under the TLD. The repository MUST publish this format as
 a HIP-5 extension document. The local harness MUST prove that hsd accepts the
-record and that each supported Handshake source returns it.
+record and that each supported Handshake source returns it. On 2026-11-03 the
+harness showed both on regtest: hsd 8.0.0 accepts an `_evm` NS target and serves
+it from its root name server, and hnsd v2.0.0 returns it after verifying the
+name proof. Both return it as a referral in the DNS authority section.
 
 ## 6. Contracts
 
@@ -518,8 +521,13 @@ wallet, an operator wallet with a little Base ETH, and a buyer wallet with USDC
 and ETH. Its network, Base Sepolia or Base mainnet, is owner-open.
 
 The steps are: deploy the factory and a registry; publish the `_evm` record
-from Bob and wait for it to reach the Handshake root, which commits name
-updates every 36 blocks, about six hours; buy, set records and transfer from
+from Bob and wait for it to reach resolvers. A full node serves it after the
+next 36-block tree commitment. hnsd proves against the root at the last
+interval boundary until 12 blocks have passed, so an SPV resolver sees it 36
+to 48 blocks after confirmation, about six to eight hours. Resolvers may also
+cache an earlier answer for the record's TTL (21,600 seconds in hsd and hnsd),
+so repointing a TLD can take up to six more hours to propagate. Then buy, set
+records and transfer from
 separate wallets; and resolve with the operator's own hsd or hnsd and a
 non-default RPC. Expiry is proven locally only.
 
@@ -545,10 +553,13 @@ cannot resolve these names until the adapter ships.
 
 ## 14. Open items
 
-The ceremony network is Base Sepolia. On 2026-11-03 two samples of Base
+The ceremony network is Base Sepolia. The public endpoint
+`https://sepolia.base.org` accepted an EIP-1898 read with `requireCanonical`
+on 2026-11-03; other providers are unchecked. On 2026-11-03 two samples of Base
 Sepolia's safe head showed lags of about 41 minutes (by block count) and 4
 minutes (by timestamp), so the 15-minute `safe` freshness default may fail
 intermittently and must be measured in the harness. The
-harness must still prove that hsd accepts an `_evm` NS target and that hnsd,
-built for regtest, returns it. Whether the chosen RPC providers honour
+harness checks the resolver's local-only configuration through its loopback
+guard and trust labels; it does not yet run the resolver in a network-isolated
+sandbox. Whether the chosen RPC providers honour
 `requireCanonical` must be checked before the ceremony.
