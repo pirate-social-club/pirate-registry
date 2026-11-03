@@ -37,6 +37,11 @@ forge build
 forge test
 ```
 
+`forge test --use solar` runs the same suite compiled with Paradigm's Solar
+(bundled with Foundry 1.9.0) as a fast development loop and a differential
+check. Release and deployed bytecode always come from solc until Solar has a
+stable release that block explorers can verify.
+
 The compiler is pinned to solc 0.8.30 with `evm_version = "cancun"`,
 optimizer 200 runs and no CBOR metadata, so runtime bytecode is reproducible
 from source for the release manifest (SPEC section 7).
