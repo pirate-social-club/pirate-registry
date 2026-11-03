@@ -40,3 +40,41 @@ jobs:
         run: forge test --use solar
         env:
           FOUNDRY_PROFILE: solar
+
+  typescript:
+    name: Resolver, SDK and local acceptance
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@dba66c27052e63476d886f22216e119ba7e615bf # v1.9.2
+        with:
+          version: v1.9.0
+
+      - name: Install Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+
+      - name: Build contracts with solc
+        run: forge build
+
+      - name: Install packages
+        run: npm ci
+
+      - name: Type-check and unit-test the resolver and SDK
+        run: |
+          npm run typecheck
+          npm run test:ts
+
+      - name: Build hnsd for regtest
+        run: docker build -t pirate-registry-hnsd:v2.0.0-regtest harness/hnsd
+
+      - name: Local acceptance (anvil, hsd regtest, hnsd)
+        run: node harness/acceptance.ts
