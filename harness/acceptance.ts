@@ -4,11 +4,12 @@
 // (docker build -t pirate-registry-hnsd:v2.0.0-regtest harness/hnsd).
 // Usage: node harness/acceptance.ts
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import {
   bytesToHex,
   createPublicClient,
+  erc20Abi,
   createTestClient,
   http,
   keccak256,
@@ -76,6 +77,20 @@ async function expectCode(promise: Promise<unknown>, code: string): Promise<void
 
 async function expectRevert(promise: Promise<unknown>, what: string): Promise<void> {
   await assert.rejects(promise, Error, `${what} should revert`);
+}
+
+/** Runs the CLI as a buyer would, with the key passed through the environment. */
+function cli(args: string[], key?: Hex): { code: number; json: Record<string, unknown> | undefined; stderr: string } {
+  const run = spawnSync('node', ['packages/sdk/src/cli.ts', ...args], {
+    cwd: ROOT,
+    encoding: 'utf8',
+    env: { ...process.env, ACCEPTANCE_KEY: key ?? '' },
+  });
+  let json: Record<string, unknown> | undefined;
+  try {
+    json = JSON.parse(run.stdout);
+  } catch {}
+  return { code: run.status ?? 1, json, stderr: run.stderr };
 }
 
 /** Two blocks so `safe` (latest - 1) includes the last transaction. */
@@ -167,9 +182,22 @@ async function main() {
     await settle();
   });
 
-  await step('3 buy studio.testtld, set records, resolve through hsd and hnsd', async () => {
-    const bought = await sdk.register(buyer, registry, { label: 'studio', years: 1 });
-    studioId = bought.tokenId;
+  const manifestFile = () => new URL('manifest.local.json', RUN_DIR).pathname;
+  const purchaseArgs = async (target: Address, label: string) => [
+    'register', '--rpc', ANVIL_URL, '--key-env', 'ACCEPTANCE_KEY', '--registry', target, '--label', label, '--years', '1',
+    '--hnsd', `${HNSD_NS.host}:${HNSD_NS.port}`, '--manifest', manifestFile(), '--now', String(await chainNow()),
+    '--accept-disclosures',
+  ];
+
+  await step('3 buy studio.testtld through the verified CLI, set records, resolve through hsd and hnsd', async () => {
+    await restartHnsd();
+    const bought = cli(await purchaseArgs(registry, 'studio'), keyOf(1));
+    assert.equal(bought.code, 0, bought.stderr);
+    assert.equal(bought.json?.delegationBefore, formatDelegation(registry, 31337));
+    assert.equal(bought.json?.delegationAfter, 'verified');
+    assert.match(bought.stderr, /Delegation verified/);
+    assert.match(bought.stderr, /no commit-reveal/);
+    studioId = BigInt(bought.json?.tokenId as string);
     await sdk.setDnsRecord(buyer, registry, studioId, { type: 'A', values: ['192.0.2.1'] });
     await sdk.setDnsRecord(buyer, registry, studioId, { type: 'TXT', values: ['hello'] });
     await sdk.setDnsRecord(buyer, registry, studioId, { relativeName: 'www', type: 'A', values: ['192.0.2.2'] });
@@ -193,20 +221,19 @@ async function main() {
     const www = await resolve('www.studio.testtld', hsd, { dnsTypes: ['A'] });
     assert.deepEqual(www.records.dns.A?.values, ['192.0.2.2']);
 
-    await restartHnsd();
     const viaHnsd = await resolve('studio.testtld', hnsd);
     check(viaHnsd);
     assert.equal(viaHnsd.handshake.trust, 'local-spv');
 
     // The CLI path, as an operator or third party would run it.
-    const cli = execFileSync(
+    const resolveOut = execFileSync(
       'node',
       ['packages/sdk/src/cli.ts', 'resolve', '--name', 'studio.testtld', '--hnsd', `${HNSD_NS.host}:${HNSD_NS.port}`,
         '--chain-rpc', `31337=${ANVIL_URL}`, '--manifest', new URL('manifest.local.json', RUN_DIR).pathname,
         '--now', String(await chainNow())],
       { cwd: ROOT, encoding: 'utf8' },
     );
-    assert.equal(JSON.parse(cli).token.holder, buyer.account.address);
+    assert.equal(JSON.parse(resolveOut).token.holder, buyer.account.address);
     writeFileSync(new URL('resolve-hnsd.json', RUN_DIR), JSON.stringify(viaHnsd, null, 2));
   });
 
@@ -325,6 +352,34 @@ async function main() {
     await expectCode(resolve('a.forged-none', hsd), 'delegation_missing');
     await expectCode(resolve('a.unclaimedtld', hsd), 'delegation_missing');
     await expectCode(resolve('nobody.testtld', hsd), 'not_registered');
+
+    // Purchases from registries the Handshake delegation does not name fail
+    // before any USDC is approved: one for an unclaimed TLD, and the original
+    // testtld registry, which step 8 left undelegated.
+    await restartHnsd();
+    for (const [target, code] of [
+      [otherTld, 'delegation_missing'],
+      [registry, 'config_mismatch'],
+    ] as const) {
+      const allowance = () =>
+        publicClient.readContract({
+          address: usdc,
+          abi: erc20Abi,
+          functionName: 'allowance',
+          args: [buyer.account.address, target],
+        });
+      const before = await allowance();
+      const balanceBefore = await publicClient.readContract({ address: usdc, abi: erc20Abi, functionName: 'balanceOf', args: [buyer.account.address] });
+      const attempt = cli(await purchaseArgs(target, 'stray'), keyOf(1));
+      assert.notEqual(attempt.code, 0, `purchase from ${target} should be refused`);
+      assert.equal(attempt.json?.error, code, attempt.stderr);
+      assert.equal(await allowance(), before, 'a refused purchase must not change the USDC approval');
+      assert.equal(
+        await publicClient.readContract({ address: usdc, abi: erc20Abi, functionName: 'balanceOf', args: [buyer.account.address] }),
+        balanceBefore,
+        'a refused purchase must not move USDC',
+      );
+    }
   });
 
   await step('10 local-only trust, remote guard, freshness and clock checks', async () => {
@@ -336,6 +391,27 @@ async function main() {
     const now = await chainNow();
     await expectCode(resolve('studio.testtld', hsd, { now: now + 3600 }), 'stale_state');
     await expectCode(resolve('studio.testtld', hsd, { now: now - 3600 }), 'clock_skew');
+
+    // The clock is read again before returning: a name that expires while
+    // records are read is refused, and TTLs count down from the final reading.
+    const expiry = r.token.expiry;
+    let reads = 0;
+    await expectCode(resolve('studio.testtld', hsd, { now: () => (reads++ === 0 ? now : expiry + 1) }), 'not_active');
+    // The block's age is rechecked too.
+    reads = 0;
+    await expectCode(resolve('studio.testtld', hsd, { now: () => (reads++ === 0 ? now : now + 2000) }), 'stale_state');
+    // With the age limit raised, the TTL counts down from the final reading.
+    await sdk.setDnsRecord(holderB, r.registry.address, BigInt(r.token.tokenId), { type: 'A', values: ['192.0.2.9'] });
+    await settle();
+    const t0 = await chainNow();
+    reads = 0;
+    const late = await resolve('studio.testtld', hsd, {
+      now: () => (reads++ === 0 ? t0 : expiry - 100),
+      maxAgeSeconds: 10 * YEAR,
+      dnsTypes: ['A'],
+    });
+    assert.equal(late.observedAt.hostTime, expiry - 100);
+    assert.equal(late.records.dns.A?.ttl, 100);
   });
 }
 

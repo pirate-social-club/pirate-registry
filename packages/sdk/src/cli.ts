@@ -27,8 +27,10 @@ Operator
 
 Buyer
   check            --rpc URL --registry ADDR --label LABEL [--years N]
-  register         --rpc URL --key-env VAR --registry ADDR --label LABEL --years N [--recipient ADDR] [--max-cost USDC] --accept-disclosures
-  renew            --rpc URL --key-env VAR --registry ADDR --label LABEL --years N [--max-cost USDC]
+  register         --rpc URL --key-env VAR --registry ADDR --label LABEL --years N (--hsd URL | --hnsd HOST:PORT)
+                   [--manifest FILE] [--recipient ADDR] [--max-cost USDC] --accept-disclosures
+  renew            --rpc URL --key-env VAR --registry ADDR --label LABEL --years N (--hsd URL | --hnsd HOST:PORT)
+                   [--manifest FILE] [--max-cost USDC]
   set-record       --rpc URL --key-env VAR --registry ADDR --label LABEL --type A|AAAA|TXT|CNAME --value V [--value V2] [--ttl S] [--sub NAME]
   set-text         --rpc URL --key-env VAR --registry ADDR --label LABEL --text-key K --value V
   set-addr         --rpc URL --key-env VAR --registry ADDR --label LABEL --address ADDR
@@ -38,6 +40,10 @@ Anyone
   resolve          --name NAME (--hsd URL | --hnsd HOST:PORT) --chain-rpc ID=URL [--manifest FILE] [--block-tag safe|finalized]
                    [--max-age S] [--type T] [--text-key K] [--remote-trust] [--now UNIX]
   verify-registry  --tld TLD (--hsd URL | --hnsd HOST:PORT) --chain-rpc ID=URL [--manifest FILE] [--block-tag ...] [--now UNIX]
+
+register and renew first verify that the TLD's Handshake delegation names
+this registry on this chain and that it passes manifest verification, and
+check again after confirmation. Nothing is approved or paid otherwise.
 
 Keys are read from the environment variable named by --key-env (a .env in the
 current directory is loaded if present). --now overrides the host clock for
@@ -109,6 +115,11 @@ function handshakeSource(): HandshakeSource {
     return rootDnsSource(host, Number(port), { allowRemote, label: 'hnsd' });
   }
   throw new Error('pass --hsd URL or --hnsd HOST:PORT');
+}
+
+/** Resolver options for verifying a purchase on the signer's own chain and RPC. */
+function authorityOptions(chainId: number) {
+  return { ...resolverOptions(), rpcUrls: { [String(chainId)]: required('rpc') } };
 }
 
 function resolverOptions() {
@@ -187,10 +198,12 @@ async function main() {
       const registry = address('registry');
       const label = required('label');
       const years = Number(values.years);
+      // Authority first: nothing is quoted, approved or paid for an undelegated registry.
+      const authority = await sdk.verifyPurchaseAuthority(s.publicClient, registry, s.chain.id, authorityOptions(s.chain.id));
       const q = await sdk.quote(s.publicClient, registry, label, years);
-      const tld = (await s.publicClient.readContract({ address: registry, abi: (await import('@pirate-registry/resolver')).registryAbi, functionName: 'tld' })) as string;
-      console.error(`Registering ${label}.${tld} for ${years} year(s) at ${formatUnits(q.cost, USDC_DECIMALS)} USDC.`);
-      for (const line of sdk.disclosures(tld)) console.error(`- ${line}`);
+      console.error(`Registering ${label}.${authority.tld} for ${years} year(s) at ${formatUnits(q.cost, USDC_DECIMALS)} USDC.`);
+      console.error(`Delegation verified: ${authority.delegation.record} via ${authority.handshake.source}.`);
+      for (const line of sdk.disclosures(authority.tld, authority.handshake.renewal)) console.error(`- ${line}`);
       if (!values['accept-disclosures']) throw new Error('re-run with --accept-disclosures after reading the disclosures above');
       const result = await sdk.register(s, registry, {
         label,
@@ -198,15 +211,27 @@ async function main() {
         recipient: values.recipient ? getAddress(values.recipient) : undefined,
         maxCost: values['max-cost'] ? usdc(values['max-cost']) : q.cost,
       });
-      print({ tokenId: result.tokenId, generation: result.generation, expiry: result.expiry, transaction: result.receipt.transactionHash });
+      const after = await sdk
+        .verifyPurchaseAuthority(s.publicClient, registry, s.chain.id, authorityOptions(s.chain.id))
+        .then(() => 'verified')
+        .catch((e: unknown) => (e instanceof ResolveError ? e.code : (e as Error).message));
+      print({
+        tokenId: result.tokenId,
+        generation: result.generation,
+        expiry: result.expiry,
+        transaction: result.receipt.transactionHash,
+        delegationBefore: authority.delegation.record,
+        delegationAfter: after,
+      });
       return;
     }
     case 'renew': {
       const s = await signer();
       const registry = address('registry');
+      const authority = await sdk.verifyPurchaseAuthority(s.publicClient, registry, s.chain.id, authorityOptions(s.chain.id));
       const tokenId = await sdk.currentTokenId(s.publicClient, registry, required('label'));
       const receipt = await sdk.renew(s, registry, tokenId, Number(values.years), values['max-cost'] ? usdc(values['max-cost']) : undefined);
-      print({ tokenId, transaction: receipt.transactionHash });
+      print({ tokenId, transaction: receipt.transactionHash, delegation: authority.delegation.record });
       return;
     }
     case 'set-record': {

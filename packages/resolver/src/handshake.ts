@@ -1,3 +1,4 @@
+import { randomInt } from 'node:crypto';
 import dgram from 'node:dgram';
 import { isIP } from 'node:net';
 import dnsPacket from 'dns-packet';
@@ -84,20 +85,28 @@ export function hsdRpcSource(url: string, options: { allowRemote?: boolean } = {
  * A Handshake root name server reached over DNS (SPEC 8, source 2), normally a
  * local hnsd that verifies name proofs itself. The delegation arrives as a
  * referral in the authority section, which ordinary stub resolvers discard.
+ * `host` must be an IP literal (or `localhost`) so replies can be matched to
+ * the exact endpoint queried.
  */
 export function rootDnsSource(
   host: string,
   port: number,
   options: { allowRemote?: boolean; timeoutMs?: number; label?: string } = {},
 ): HandshakeSource {
+  const address = host === 'localhost' ? '127.0.0.1' : host.replace(/^\[|\]$/g, '');
+  if (isIP(address) === 0) throw new ResolveError('handshake_unavailable', `root DNS host must be an IP address, got ${host}`);
   const description = `${options.label ?? 'root'} dns://${host}:${port}`;
-  const remote = requireTrust(host, options.allowRemote ?? false, description);
+  const remote = requireTrust(address, options.allowRemote ?? false, description);
   return {
     description,
     async lookup(tld) {
-      const response = await queryNs(host, port, tld, options.timeoutMs ?? 3000).catch((error: Error) => {
+      const response = await queryNs(address, port, tld, options.timeoutMs ?? 3000).catch((error: Error) => {
         throw new ResolveError('handshake_unavailable', `${description}: ${error.message}`);
       });
+      const rcode = (response as { rcode?: string }).rcode ?? 'NOERROR';
+      if (rcode !== 'NOERROR' && rcode !== 'NXDOMAIN') {
+        throw new ResolveError('handshake_unavailable', `${description} answered ${rcode}`);
+      }
       const records = [...(response.answers ?? []), ...(response.authorities ?? [])];
       const nsTargets = records
         .filter((r) => r.type === 'NS' && r.name.toLowerCase() === tld.toLowerCase())
@@ -107,26 +116,82 @@ export function rootDnsSource(
   };
 }
 
-function queryNs(host: string, port: number, name: string, timeoutMs: number): Promise<dnsPacket.Packet> {
+type DecodedResponse = dnsPacket.Packet & {
+  flag_qr?: boolean;
+  flag_tc?: boolean;
+  opcode?: string;
+  rcode?: string;
+};
+
+/**
+ * Why a datagram is not the answer to our query, or undefined if it is.
+ * Exported for tests.
+ */
+export function rejectReason(
+  message: Buffer,
+  from: { address: string; port: number },
+  expected: { address: string; port: number; id: number; name: string },
+): string | undefined {
+  if (from.address !== expected.address || from.port !== expected.port) {
+    return `datagram from ${from.address}:${from.port}, not the queried server`;
+  }
+  let packet: DecodedResponse;
+  try {
+    packet = dnsPacket.decode(message) as DecodedResponse;
+  } catch (error) {
+    return `undecodable datagram (${(error as Error).message})`;
+  }
+  if (packet.id !== expected.id) return 'response ID does not match the query';
+  if (!packet.flag_qr) return 'datagram is not a response';
+  if ((packet.opcode ?? 'QUERY') !== 'QUERY') return `unexpected opcode ${packet.opcode}`;
+  const questions = packet.questions ?? [];
+  const question = questions[0];
+  if (
+    questions.length !== 1 ||
+    question.type !== 'NS' ||
+    (question.class ?? 'IN') !== 'IN' ||
+    question.name.toLowerCase() !== expected.name.toLowerCase()
+  ) {
+    return 'response question does not match the query';
+  }
+  return undefined;
+}
+
+/**
+ * One NS query over UDP. Datagrams from any other endpoint, with another ID,
+ * that fail to decode, or that answer a different question are ignored, so an
+ * injected packet cannot end the wait early; their reasons are reported if no
+ * valid answer arrives. A truncated valid answer fails closed (no TCP fallback).
+ */
+function queryNs(address: string, port: number, name: string, timeoutMs: number): Promise<DecodedResponse> {
   return new Promise((resolve, reject) => {
-    const id = Math.floor(Math.random() * 0xffff);
-    const socket = dgram.createSocket(isIP(host) === 6 ? 'udp6' : 'udp4');
+    const id = randomInt(0, 0x10000);
+    const socket = dgram.createSocket(isIP(address) === 6 ? 'udp6' : 'udp4');
+    const ignored: string[] = [];
+    const finish = (error?: Error, packet?: DecodedResponse) => {
+      clearTimeout(timer);
+      socket.close();
+      if (error) reject(error);
+      else resolve(packet as DecodedResponse);
+    };
     const timer = setTimeout(() => {
-      socket.close();
-      reject(new Error(`no DNS response within ${timeoutMs} ms`));
+      const why = ignored.length ? `; ignored ${ignored.length} datagram(s): ${ignored.slice(-3).join('; ')}` : '';
+      finish(new Error(`no valid DNS response within ${timeoutMs} ms${why}`));
     }, timeoutMs);
-    socket.on('message', (message) => {
-      const packet = dnsPacket.decode(message);
-      if (packet.id !== id) return;
-      clearTimeout(timer);
-      socket.close();
-      resolve(packet);
+    socket.on('message', (message, from) => {
+      const reason = rejectReason(message, from, { address, port, id, name });
+      if (reason) {
+        ignored.push(reason);
+        return;
+      }
+      const packet = dnsPacket.decode(message) as DecodedResponse;
+      if (packet.flag_tc) {
+        finish(new Error('response truncated; TCP fallback is not implemented'));
+        return;
+      }
+      finish(undefined, packet);
     });
-    socket.on('error', (error) => {
-      clearTimeout(timer);
-      socket.close();
-      reject(error);
-    });
+    socket.on('error', (error) => finish(error));
     const query = dnsPacket.encode({
       type: 'query',
       id,
@@ -136,6 +201,6 @@ function queryNs(host: string, port: number, name: string, timeoutMs: number): P
         { type: 'OPT', name: '.', udpPayloadSize: 4096, extendedRcode: 0, ednsVersion: 0, flags: 0, flag_do: false, options: [] },
       ],
     });
-    socket.send(query, port, host);
+    socket.send(query, port, address);
   });
 }

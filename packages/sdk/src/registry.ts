@@ -4,6 +4,7 @@ import {
   createWalletClient,
   defineChain,
   erc20Abi,
+  getAddress,
   http,
   parseEventLogs,
   type Account,
@@ -22,11 +23,15 @@ import {
   encodeRRset,
   factoryAbi,
   registryAbi,
+  ResolveError,
   RRTYPE,
   STATUS,
   textKey,
   tokenIdFor,
+  verifyRegistry,
   type DnsType,
+  type ResolveOptions,
+  type VerifiedRegistry,
 } from '@pirate-registry/resolver';
 
 export interface Signer {
@@ -120,6 +125,31 @@ export const setTreasury = (s: Signer, registry: Address, treasury: Address) => 
 export const sweep = (s: Signer, registry: Address) => write(s, registry, 'sweep', []);
 
 // --- Buyer -------------------------------------------------------------------
+
+export type AuthorityOptions = Omit<ResolveOptions, 'name' | 'dnsTypes' | 'textKeys' | 'coinTypes'>;
+
+/**
+ * SPEC section 4: before any purchase, the registry must be the one the TLD's
+ * current Handshake delegation names, on this chain, and must pass manifest
+ * verification. Deploying a registry confers no authority, so a registry
+ * address alone is never trusted.
+ */
+export async function verifyPurchaseAuthority(
+  client: PublicClient,
+  registry: Address,
+  chainId: number,
+  options: AuthorityOptions,
+): Promise<VerifiedRegistry & { tld: string }> {
+  const tld = await client.readContract({ address: registry, abi: registryAbi, functionName: 'tld' });
+  const verified = await verifyRegistry(tld, options);
+  if (verified.delegation.chainId !== BigInt(chainId)) {
+    throw new ResolveError('chain_mismatch', `.${tld} is delegated to chain ${verified.delegation.chainId}, not ${chainId}`);
+  }
+  if (verified.delegation.registry !== getAddress(registry)) {
+    throw new ResolveError('config_mismatch', `.${tld} is delegated to ${verified.delegation.registry}, not ${registry}`);
+  }
+  return Object.assign(verified, { tld });
+}
 
 export async function quote(client: PublicClient, registry: Address, label: string, years: number) {
   const [available, annualPrice, paymentToken, current] = await Promise.all([

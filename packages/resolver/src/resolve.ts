@@ -33,8 +33,11 @@ export interface ResolveOptions {
   manifest: ReleaseManifest;
   blockTag?: BlockTag;
   maxAgeSeconds?: number;
-  /** Host clock in seconds. Override only for test networks; reported in output. */
-  now?: number;
+  /**
+   * Host clock in seconds, read at the start and again just before returning.
+   * Override only for test networks; reported in output.
+   */
+  now?: number | (() => number);
   dnsTypes?: DnsType[];
   textKeys?: string[];
   coinTypes?: bigint[];
@@ -49,6 +52,8 @@ export interface VerifiedRegistry {
   protocolVersion: number;
   hostTime: number;
   clock: 'system' | 'override';
+  readClock: () => number;
+  maxAge: number;
   evmTrust: 'local-rpc' | 'remote-rpc';
 }
 
@@ -104,7 +109,14 @@ export async function verifyRegistry(
   const tag = options.blockTag ?? 'safe';
   const reader = await PinnedReader.open(rpcUrl, tag, delegation.chainId);
   const clock = options.now === undefined ? 'system' : 'override';
-  const hostTime = options.now ?? Math.floor(Date.now() / 1000);
+  const override = options.now;
+  const readClock =
+    override === undefined
+      ? () => Math.floor(Date.now() / 1000)
+      : typeof override === 'number'
+        ? () => override
+        : override;
+  const hostTime = readClock();
   const blockTime = Number(reader.block.timestamp);
   if (blockTime - hostTime > MAX_CLOCK_AHEAD) {
     throw new ResolveError('clock_skew', `block ${reader.block.number} is ${blockTime - hostTime}s ahead of the host clock`);
@@ -159,6 +171,8 @@ export async function verifyRegistry(
     protocolVersion: Number(protocolVersion),
     hostTime,
     clock,
+    readClock,
+    maxAge,
     evmTrust: isLoopback(new URL(rpcUrl).hostname) ? 'local-rpc' : 'remote-rpc',
   };
 }
@@ -187,18 +201,17 @@ export async function resolveName(options: ResolveOptions): Promise<ResolveResul
   if (expirySeconds <= hostTime) {
     throw new ResolveError('not_active', `${label}.${tld} expired at ${expirySeconds}, after the selected block`);
   }
-  const remaining = expirySeconds - hostTime;
 
   const readRecord = async (key: Hex) => (await reader.read(registry, registryAbi, 'record', [tokenId, key])) as Hex;
 
-  const dns: ResolveResult['records']['dns'] = {};
+  const sets: Array<{ type: DnsType; ttl: number; values: Array<string | string[]> }> = [];
   for (const type of options.dnsTypes ?? DNS_TYPES) {
     const value = await readRecord(dnsKey(relativeName, RRTYPE[type]));
     if (value === '0x') continue;
     const set = decodeRRset(value);
-    dns[type] = { ttl: Math.min(set.ttl, remaining), values: set.rdatas.map((r) => decodeRdata(type, r)) };
+    sets.push({ type, ttl: set.ttl, values: set.rdatas.map((r) => decodeRdata(type, r)) });
   }
-  if (dns.CNAME && Object.keys(dns).length > 1) {
+  if (sets.some((s) => s.type === 'CNAME') && sets.length > 1) {
     throw new ResolveError('record_malformed', 'CNAME coexists with other types at the same name');
   }
 
@@ -224,6 +237,19 @@ export async function resolveName(options: ResolveOptions): Promise<ResolveResul
     addr[coinType.toString()] = getAddress(value);
   }
 
+  // Read the clock again: record reads take time, and the answer must still
+  // be usable when it is returned. TTLs count down from this reading.
+  const finalTime = verified.readClock();
+  if (expirySeconds <= finalTime) {
+    throw new ResolveError('not_active', `${label}.${tld} expired at ${expirySeconds} while records were being read`);
+  }
+  if (finalTime - Number(reader.block.timestamp) > verified.maxAge) {
+    throw new ResolveError('stale_state', `block ${reader.block.number} became older than ${verified.maxAge}s during resolution`);
+  }
+  const remaining = expirySeconds - finalTime;
+  const dns: ResolveResult['records']['dns'] = {};
+  for (const set of sets) dns[set.type] = { ttl: Math.min(set.ttl, remaining), values: set.values };
+
   return {
     name: options.name.toLowerCase().replace(/\.$/, ''),
     usable: true,
@@ -233,7 +259,7 @@ export async function resolveName(options: ResolveOptions): Promise<ResolveResul
       blockNumber: reader.block.number.toString(),
       blockHash: reader.block.hash,
       blockTimestamp: Number(reader.block.timestamp),
-      hostTime,
+      hostTime: finalTime,
       clock: verified.clock,
     },
     handshake: { ...verified.handshake, tldRenewal: verified.handshake.renewal, record: delegation.record },
