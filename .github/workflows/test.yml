@@ -36,5 +36,7 @@ jobs:
       - name: Run Forge tests (solc, release compiler)
         run: forge test -vvv
 
-      - name: Run Forge tests (Solar, differential check only)
+      - name: Run Forge tests (Solar, separate output, cross-compiler check only)
         run: forge test --use solar
+        env:
+          FOUNDRY_PROFILE: solar

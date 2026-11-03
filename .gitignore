@@ -1,6 +1,8 @@
 # Compiler files
 cache/
 out/
+cache-solar/
+out-solar/
 
 # Commonly ignored directories
 .logs/

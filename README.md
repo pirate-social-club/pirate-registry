@@ -37,10 +37,12 @@ forge build
 forge test
 ```
 
-`forge test --use solar` runs the same suite compiled with Paradigm's Solar
-(bundled with Foundry 1.9.0) as a fast development loop and a differential
-check. Release and deployed bytecode always come from solc until Solar has a
-stable release that block explorers can verify.
+`FOUNDRY_PROFILE=solar forge test --use solar` runs the same suite compiled
+with Paradigm's Solar (bundled with Foundry 1.9.0, reporting itself as
+Solidity 0.8.38) into separate `out-solar/` and `cache-solar/` directories.
+It is a fast development loop and a cross-compiler check, not proof of
+behavioural equivalence. Release and deployed bytecode, and the manifest's
+code hashes, are always rebuilt with the pinned solc.
 
 The compiler is pinned to solc 0.8.30 with `evm_version = "cancun"`,
 optimizer 200 runs and no CBOR metadata, so runtime bytecode is reproducible

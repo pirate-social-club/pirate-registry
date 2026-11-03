@@ -357,7 +357,7 @@ contract SLDRegistry is ERC721Upgradeable, ReentrancyGuardTransient {
     /// @dev Every OpenZeppelin v5 transfer, mint and burn passes through here.
     /// Transfers require Active status. Any ownership change clears the record
     /// manager, so it cannot revive if the token returns to an earlier holder.
-    function _update(address to, uint256 tokenId, address auth) internal override returns (address) {
+    function _update(address to, uint256 tokenId, address auth) internal virtual override returns (address) {
         address from = _ownerOf(tokenId);
         if (from != address(0) && to != address(0) && _status(tokenId) != Status.Active) {
             revert NotActive(tokenId);

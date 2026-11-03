@@ -8,7 +8,7 @@ import {MockUSDC} from "../mocks/MockUSDC.sol";
 import {RegistryHandler} from "./RegistryHandler.sol";
 
 /// SPEC section 10 invariants, checked after every step of random action
-/// sequences driven by RegistryHandler.
+/// sequences driven by RegistryHandler against its independent model.
 contract RegistryInvariants is Test {
     SLDRegistry internal registry;
     MockUSDC internal usdc;
@@ -28,13 +28,31 @@ contract RegistryInvariants is Test {
         targetContract(address(handler));
     }
 
-    /// Logged once per run so coverage can be inspected with -vv.
+    /// Logged once per run so coverage can be inspected with -vv. Required
+    /// coverage is asserted deterministically in HandlerCoverage.t.sol.
     function afterInvariant() public view {
         console.log("registrations", handler.registrations(), "re-registrations", handler.reRegistrations());
         console.log("renewals", handler.renewals(), "in grace", handler.graceRenewals());
         console.log("transfers", handler.transfers(), "by approved operator", handler.operatorTransfers());
+        console.log("rejected transfers", handler.rejectedTransfers());
         console.log("manager record writes", handler.managerRecordWrites());
         console.log("sweeps ok", handler.sweepsSucceeded(), "failed", handler.sweepsFailed());
+    }
+
+    /// Every contract outcome (success or revert) matched the model's
+    /// permission for that action.
+    function invariant_OutcomesMatchModel() public view {
+        assertEq(handler.mismatches(), 0, "contract outcome differed from model");
+    }
+
+    /// Status and expiry match the independent model for every token.
+    function invariant_LifecycleMatchesModel() public view {
+        for (uint256 i; i < handler.tokenCount(); ++i) {
+            uint256 id = handler.tokenAt(i);
+            assertEq(uint8(registry.status(id)), uint8(handler.modelStatus(id)), "status");
+            assertEq(registry.expiresAt(id), handler.ghostExpiry(id), "expiry");
+            assertEq(registry.lockedPrice(id), handler.ghostLockedPrice(id), "locked price");
+        }
     }
 
     /// Registry balance = payments + unsolicited deposits - sweeps.
@@ -51,27 +69,16 @@ contract RegistryInvariants is Test {
         assertEq(total, handler.swept());
     }
 
-    /// No transfer or record change without the holder's applicable
-    /// authorization, and the operator never gains any.
-    function invariant_NoUnauthorizedActions() public view {
-        assertFalse(handler.unauthorizedSuccess());
-    }
-
-    function invariant_RecordManagerClearedOnTransfer() public view {
-        assertFalse(handler.managerSurvivedTransfer());
-    }
-
-    /// Ownership, locked price and the term cap match the ghost model.
-    function invariant_TokensMatchModel() public view {
-        uint256 maxRemaining = registry.MAX_REMAINING();
+    /// Ownership views and the term cap agree with the model.
+    function invariant_OwnershipMatchesModel() public view {
         for (uint256 i; i < handler.tokenCount(); ++i) {
             uint256 id = handler.tokenAt(i);
-            SLDRegistry.Status status_ = registry.status(id);
-            assertEq(registry.lockedPrice(id), handler.ghostLockedPrice(id));
+            SLDRegistry.Status status_ = handler.modelStatus(id);
             if (status_ == SLDRegistry.Status.Active) {
                 assertEq(registry.ownerOf(id), handler.ghostOwner(id));
                 assertEq(registry.effectiveOwner(id), handler.ghostOwner(id));
-                assertLe(registry.expiresAt(id), block.timestamp + maxRemaining);
+                assertEq(registry.recordManager(id), handler.ghostManager(id));
+                assertLe(registry.expiresAt(id), block.timestamp + 3650 days);
             } else if (status_ == SLDRegistry.Status.Grace) {
                 assertEq(registry.registrant(id), handler.ghostOwner(id));
                 assertEq(registry.effectiveOwner(id), address(0));
@@ -79,14 +86,11 @@ contract RegistryInvariants is Test {
                 assertEq(registry.effectiveOwner(id), address(0));
                 assertEq(registry.registrant(id), address(0));
             }
-            if (status_ == SLDRegistry.Status.Superseded) {
-                assertEq(registry.recordManager(id), address(0));
-            }
         }
     }
 
-    /// Each label has at most one live token, and it is the current
-    /// generation recorded by the model.
+    /// Each label's current generation matches the model, and at most one
+    /// token per label is not Superseded.
     function invariant_OneLiveTokenPerLabel() public view {
         for (uint256 l; l < handler.labelCount(); ++l) {
             string memory label = handler.labelAt(l);
@@ -96,9 +100,8 @@ contract RegistryInvariants is Test {
             uint256 live;
             for (uint256 i; i < handler.tokenCount(); ++i) {
                 uint256 id = handler.tokenAt(i);
-                if (registry.tokenIdFor(labelhash, registry.generationOf(id)) != id) continue;
-                SLDRegistry.Status status_ = registry.status(id);
-                if (status_ != SLDRegistry.Status.Superseded && status_ != SLDRegistry.Status.Unknown) {
+                if (handler.ghostLabelhash(id) != labelhash) continue;
+                if (handler.modelStatus(id) != SLDRegistry.Status.Superseded) {
                     ++live;
                     assertEq(id, current);
                 }

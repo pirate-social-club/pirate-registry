@@ -21,3 +21,10 @@ runs = 1024
 runs = 64
 depth = 256
 fail_on_revert = false
+
+# Development and differential testing only: Solar output never mixes with
+# the solc release artifacts in out/ and cache/.
+# FOUNDRY_PROFILE=solar forge test --use solar
+[profile.solar]
+out = "out-solar"
+cache_path = "cache-solar"
