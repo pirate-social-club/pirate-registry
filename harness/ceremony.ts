@@ -89,13 +89,19 @@ async function waitForSafe(hash: Hex, what: string) {
   throw new Error(`${what} did not reach the safe head in 20 minutes`);
 }
 
-function hnsdHeight(): number | undefined {
+/** hnsd's latest height from its log tail; null (kept in the evidence) if unreadable. */
+function hnsdHeight(): number | null {
   try {
-    const logs = execFileSync('docker', ['logs', values['hnsd-container'] as string], { encoding: 'utf8' });
+    const logs = execFileSync('docker', ['logs', '--tail', '5000', values['hnsd-container'] as string], {
+      encoding: 'utf8',
+      maxBuffer: 64 << 20,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
     const heights = [...logs.matchAll(/new height: (\d+)/g)];
-    return heights.length ? Number(heights[heights.length - 1][1]) : undefined;
-  } catch {
-    return undefined;
+    return heights.length ? Number(heights[heights.length - 1][1]) : null;
+  } catch (error) {
+    console.error(`hnsd height unreadable: ${(error as Error).message}`);
+    return null;
   }
 }
 

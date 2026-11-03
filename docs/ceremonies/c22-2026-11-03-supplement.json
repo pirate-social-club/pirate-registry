@@ -1,0 +1,68 @@
+{
+  "ceremony": "c22",
+  "note": "Supplements c22-2026-11-03.json, which ceremony.ts at 63eb952 wrote without hnsd heights: its hnsdHeight() read the full container log (8932813 bytes), which exceeded execFileSync's 1 MiB buffer, and the error was swallowed. The heights below come from hnsd's timestamped log.",
+  "gate1Inclusion": {
+    "source": "Bob node (SPV header chain) and wallet psc1",
+    "checkedAt": "2026-11-03T10:43:50.754Z",
+    "txid": "e158e4f4d0a524ef53772fd82f3ad35b595aaf70a17474016a399da53408032c",
+    "height": 354155,
+    "blockHash": "000000000000000a5982e38ddca4ba1de49073c3f6d433a73deb6c389d524e66",
+    "blockTime": 1793701803,
+    "confirmationsAtCheck": 2,
+    "laterObservation": "15 confirmations at tip 354169, 2026-11-03T12:15:26Z"
+  },
+  "gate2Verification": {
+    "source": "hnsd v2.0.0 mainnet, dns://127.0.0.1:27349, restarted before the check",
+    "checkedAt": "2026-11-03T13:25:09Z",
+    "hnsdHeight": 354180,
+    "result": "verified",
+    "expectedFrom": "354180: first tree commitment containing the update at 354168, used by hnsd once 12 blocks sit on it",
+    "earlierChecks": "every check from hnsd height 354156 to 354178 returned delegation_missing"
+  },
+  "hnsdHeightDuringCeremony": {
+    "value": 354180,
+    "evidence": "hnsd reached 354180 at 2026-11-03T13:25:30Z and logged no new height or restart before 2026-11-03T13:35:00Z; the ceremony ran from 13:26:50Z to 13:30:46Z, with resolves at 13:28:00Z and 13:30:46Z"
+  },
+  "evm": {
+    "chainId": 84532,
+    "rpc": "https://sepolia.base.org",
+    "approve": {
+      "transaction": "0xe34e2e5d5bb12b2e83b63368fb36ab2fc99818c67f216c5623a230684b60feb6",
+      "blockNumber": "53952747",
+      "value": "1 USDC"
+    },
+    "receipts": {
+      "purchase": {
+        "transaction": "0x5a40369e34b9d02445917845474090355e00769f0e05f621d114c59692e4de07",
+        "status": "success",
+        "blockNumber": "53952761",
+        "blockHash": "0x7e76ccbb21ae8f43d8772705be68d03672505e555a9e1a5cfeb5a579d96e6f51"
+      },
+      "recordA": {
+        "transaction": "0xe5a84ad15cc1db81f6f4d6cbe6ed41c03eb7f6300ea743274e9bae879101aa26",
+        "status": "success",
+        "blockNumber": "53952785",
+        "blockHash": "0xed462a83b51ff3b507a8d8ac674b1ce720781ae107a071e3acd6e5fa2bdde2e7"
+      },
+      "recordTxt": {
+        "transaction": "0x900e4bb07d5fee84d09a4673578eec7578ed719dca1f1280ee593676abca152d",
+        "status": "success",
+        "blockNumber": "53952801",
+        "blockHash": "0x72063b20b6a614c02ca88db69314678ba75919759682412549924779e0d5574b"
+      },
+      "transfer": {
+        "transaction": "0xeca58ad144f40b783992562a1593ff54203826092e461b089f84e798d929c069",
+        "status": "success",
+        "blockNumber": "53953073",
+        "blockHash": "0x43a4a2fa0eddf10fda96b76401ec92177499942c1fc491ec125e4dcd19e02701"
+      }
+    },
+    "balancesAtSafeBlock": {
+      "blockNumber": "53953719",
+      "blockHash": "0x2efc1fa49cf4098cba031185cbe83d93882d281d063994316799b33c3bd09959",
+      "registryUsdc": "1",
+      "buyerUsdc": "18 (19 before the purchase)"
+    }
+  },
+  "liveState": "The c22 delegation stays published as a test deployment. Reversal: an UPDATE on c22 with {\"records\": []} from wallet psc1."
+}
