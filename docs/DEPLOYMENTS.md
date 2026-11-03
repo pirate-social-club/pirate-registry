@@ -28,3 +28,26 @@ The deployment took about 3.5 minutes to reach the safe head.
 
 Registries deployed from this factory for rehearsal TLDs confer no authority
 over any real Handshake TLD; only a TLD's `_evm` record does.
+
+### Rehearsal on Base Sepolia, 2026-11-03
+
+`node harness/sepolia-rehearsal.ts` ran against these contracts with a local
+hsd regtest TLD `testtld` standing in for a real Handshake TLD, which has not
+been bought yet. It passed:
+
+- Rehearsal registry `0x6C6e36d9621a07a912675f1e78b27a7321026FE1` for
+  `testtld`, price 1 USDC, deployed in transaction
+  `0x8cf9b2c5208f791660d6932baec3b8ef3cf7dec19e2e9d8da728b4dcfba74022`.
+- `verify-registry` through hnsd (`local-spv`) and the public RPC
+  (`remote-rpc`) at safe block 53881299, system clock, release
+  `base-sepolia-1`.
+- The buyer `0xd77193a3B794c70dC116b5F7Eeca0C59dEec9098` bought
+  `studio.testtld` through the verified CLI in transaction
+  `0x21b4c42b19977993322e4d6582ef1bca4cff0f50bdeb45da29cd59929d5b779b`;
+  the delegation was verified before and after confirmation. The buyer's
+  USDC fell from 20 to 19 and the registry holds 1.
+- After setting an A record, `resolve` returned the buyer as holder and
+  `192.0.2.10` at safe block 53882197, 30 seconds old by the system clock.
+
+No safe-head staleness occurred during this run. The real ceremony still
+needs a fresh Handshake TLD published from Bob.
