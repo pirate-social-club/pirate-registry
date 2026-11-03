@@ -38,7 +38,7 @@ Buyer
 
 Anyone
   resolve          --name NAME (--hsd URL | --hnsd HOST:PORT) --chain-rpc ID=URL [--manifest FILE] [--block-tag safe|finalized]
-                   [--max-age S] [--type T] [--text-key K] [--remote-trust] [--now UNIX]
+                   [--max-age S] [--type T] [--text-key K] [--remote-trust] [--now UNIX] [--dns-timeout MS]
   verify-registry  --tld TLD (--hsd URL | --hnsd HOST:PORT) --chain-rpc ID=URL [--manifest FILE] [--block-tag ...] [--now UNIX]
 
 register and renew first verify that the TLD's Handshake delegation names
@@ -82,6 +82,7 @@ const { positionals, values } = parseArgs({
     'block-tag': { type: 'string', default: 'safe' },
     'max-age': { type: 'string' },
     'remote-trust': { type: 'boolean', default: false },
+    'dns-timeout': { type: 'string', default: '3000' },
     now: { type: 'string' },
     help: { type: 'boolean', default: false },
   },
@@ -112,7 +113,7 @@ function handshakeSource(): HandshakeSource {
   if (values.hsd) return hsdRpcSource(values.hsd, { allowRemote });
   if (values.hnsd) {
     const [host, port] = values.hnsd.split(/:(?=\d+$)/);
-    return rootDnsSource(host, Number(port), { allowRemote, label: 'hnsd' });
+    return rootDnsSource(host, Number(port), { allowRemote, label: 'hnsd', timeoutMs: Number(values['dns-timeout']) });
   }
   throw new Error('pass --hsd URL or --hnsd HOST:PORT');
 }

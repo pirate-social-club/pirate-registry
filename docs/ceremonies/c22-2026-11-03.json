@@ -1,0 +1,164 @@
+{
+  "ceremony": "c22",
+  "startedAt": "2026-11-03T13:26:50.809Z",
+  "manifestRelease": "base-sepolia-1",
+  "handshake": {
+    "network": "main",
+    "delegationRecord": "0x39e01249d867791f92acc70abfdcd97ee82884c9.84532._evm.",
+    "updateTransaction": "e158e4f4d0a524ef53772fd82f3ad35b595aaf70a17474016a399da53408032c",
+    "updateBlock": {
+      "height": 354155,
+      "hash": "000000000000000a5982e38ddca4ba1de49073c3f6d433a73deb6c389d524e66"
+    }
+  },
+  "evm": {
+    "chainId": 84532,
+    "rpc": "https://sepolia.base.org",
+    "registry": "0x39E01249d867791F92acC70AbFdcD97Ee82884C9",
+    "registryDeployTransaction": "0x3d4da5e11bf07d1c9295d5574fde03a4b25e3b8331e0e5cee3428383751061eb"
+  },
+  "verifyRegistry": {
+    "tld": "c22",
+    "registry": "0x39E01249d867791F92acC70AbFdcD97Ee82884C9",
+    "chainId": "84532",
+    "record": "0x39e01249d867791f92acc70abfdcd97ee82884c9.84532._evm.",
+    "manifestRelease": "base-sepolia-1",
+    "protocolVersion": 1,
+    "handshake": {
+      "source": "hnsd dns://127.0.0.1:27349",
+      "trust": "local-spv"
+    },
+    "block": {
+      "tag": "safe",
+      "number": "53951999",
+      "hash": "0x9ebfcb852107d835ae99c7ab4a79aa50003c89dbb8e5486843c705afb6829af2",
+      "timestamp": "1793712268"
+    },
+    "evmTrust": "remote-rpc",
+    "clock": "system"
+  },
+  "purchase": {
+    "tokenId": "30059860971171775745535162368446313455489111274700279074148833971304537382009",
+    "generation": "1",
+    "expiry": "1825248421",
+    "transaction": "0x5a40369e34b9d02445917845474090355e00769f0e05f621d114c59692e4de07",
+    "delegationBefore": "0x39e01249d867791f92acc70abfdcd97ee82884c9.84532._evm.",
+    "delegationAfter": "verified",
+    "disclosures": [
+      "- The owner of .c22 on Handshake can repoint its delegation or let it lapse, which ends resolution while the NFT survives. Its Handshake renewal deadline is unknown from this source.",
+      "- This registry runs on Base and depends on its sequencer ordering, upgrade controls and finality.",
+      "- Circle can pause USDC or blacklist the payer or the registry; either blocks paid registrations, paid renewals and sweeps.",
+      "- There is no commit-reveal: another buyer can win a race for the same label. The maximum cost and deadline protect only the payment terms.",
+      "- The operator's revenue sits in the registry contract until someone sweeps it to the treasury.",
+      "- Records are public."
+    ]
+  },
+  "records": {
+    "aTransaction": "0xe5a84ad15cc1db81f6f4d6cbe6ed41c03eb7f6300ea743274e9bae879101aa26",
+    "txtTransaction": "0x900e4bb07d5fee84d09a4673578eec7578ed719dca1f1280ee593676abca152d"
+  },
+  "resolveAfterPurchase": {
+    "observedAt": {
+      "chainId": "84532",
+      "blockTag": "safe",
+      "blockNumber": "53952865",
+      "blockHash": "0xf5fb8af8a4eba4280472041d74af2ad9285d1982faa19078aead09a6c90a9809",
+      "blockTimestamp": 1793712441,
+      "hostTime": 1793712480,
+      "clock": "system"
+    },
+    "handshake": {
+      "source": "hnsd dns://127.0.0.1:27349",
+      "trust": "local-spv",
+      "record": "0x39e01249d867791f92acc70abfdcd97ee82884c9.84532._evm."
+    },
+    "registry": {
+      "address": "0x39E01249d867791F92acC70AbFdcD97Ee82884C9",
+      "factory": "0xCC6420FE45F6596784B84fFD2b39B0333ab3ea7C",
+      "manifestRelease": "base-sepolia-1",
+      "protocolVersion": 1
+    },
+    "token": {
+      "label": "studio",
+      "tokenId": "30059860971171775745535162368446313455489111274700279074148833971304537382009",
+      "generation": "1",
+      "holder": "0xd77193a3B794c70dC116b5F7Eeca0C59dEec9098",
+      "expiry": 1825248421
+    },
+    "records": {
+      "dns": {
+        "A": {
+          "ttl": 300,
+          "values": [
+            "192.0.2.22"
+          ]
+        },
+        "TXT": {
+          "ttl": 300,
+          "values": [
+            [
+              "pirate-registry ceremony 2026-11-03"
+            ]
+          ]
+        }
+      },
+      "text": {},
+      "addr": {}
+    }
+  },
+  "transfer": {
+    "transaction": "0xeca58ad144f40b783992562a1593ff54203826092e461b089f84e798d929c069",
+    "to": "0x7C10aD766F955Bcd6c9ED9CF548D707bf55a33d2"
+  },
+  "resolveAfterTransfer": {
+    "observedAt": {
+      "chainId": "84532",
+      "blockTag": "safe",
+      "blockNumber": "53953719",
+      "blockHash": "0x2efc1fa49cf4098cba031185cbe83d93882d281d063994316799b33c3bd09959",
+      "blockTimestamp": 1793712612,
+      "hostTime": 1793712646,
+      "clock": "system"
+    },
+    "handshake": {
+      "source": "hnsd dns://127.0.0.1:27349",
+      "trust": "local-spv",
+      "record": "0x39e01249d867791f92acc70abfdcd97ee82884c9.84532._evm."
+    },
+    "registry": {
+      "address": "0x39E01249d867791F92acC70AbFdcD97Ee82884C9",
+      "factory": "0xCC6420FE45F6596784B84fFD2b39B0333ab3ea7C",
+      "manifestRelease": "base-sepolia-1",
+      "protocolVersion": 1
+    },
+    "token": {
+      "label": "studio",
+      "tokenId": "30059860971171775745535162368446313455489111274700279074148833971304537382009",
+      "generation": "1",
+      "holder": "0x7C10aD766F955Bcd6c9ED9CF548D707bf55a33d2",
+      "expiry": 1825248421
+    },
+    "records": {
+      "dns": {
+        "A": {
+          "ttl": 300,
+          "values": [
+            "192.0.2.22"
+          ]
+        },
+        "TXT": {
+          "ttl": 300,
+          "values": [
+            [
+              "pirate-registry ceremony 2026-11-03"
+            ]
+          ]
+        }
+      },
+      "text": {},
+      "addr": {}
+    }
+  },
+  "result": "passed",
+  "finishedAt": "2026-11-03T13:30:46.581Z"
+}

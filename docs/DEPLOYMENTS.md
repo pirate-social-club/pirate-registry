@@ -49,5 +49,51 @@ been bought yet. It passed:
 - After setting an A record, `resolve` returned the buyer as holder and
   `192.0.2.10` at safe block 53882197, 30 seconds old by the system clock.
 
-No safe-head staleness occurred during this run. The real ceremony still
-needs a fresh Handshake TLD published from Bob.
+No safe-head staleness occurred during this run. The real ceremony with a
+Handshake TLD followed on `c22`, below.
+
+### Real Handshake ceremony on `c22`, 2026-11-03
+
+Real Handshake authority, test registrations: the mainnet TLD `c22` is
+delegated to a registry on Base Sepolia. Registrations and payments are
+testnet only. Evidence is in `docs/ceremonies/c22-2026-11-03.json`, written
+by `harness/ceremony.ts`, and `docs/ceremonies/c22-2026-11-03-supplement.json`.
+
+Registry `0x39E01249d867791F92acC70AbFdcD97Ee82884C9` for `c22`, price 1
+USDC, was deployed from the release `base-sepolia-1` factory in transaction
+`0x3d4da5e11bf07d1c9295d5574fde03a4b25e3b8331e0e5cee3428383751061eb`. Its
+admin and treasury are the testnet operator.
+
+The Handshake update publishing the single NS record
+`0x39e01249d867791f92acc70abfdcd97ee82884c9.84532._evm.` was transaction
+`e158e4f4d0a524ef53772fd82f3ad35b595aaf70a17474016a399da53408032c`, mined in
+block 354155 (`000000000000000a5982e38ddca4ba1de49073c3f6d433a73deb6c389d524e66`).
+c22 previously published no records; the reversal is an UPDATE back to an
+empty resource.
+
+The two gates were evidenced separately. Inclusion was read from Bob's SPV
+header chain and wallet. Independent verification came from a local mainnet
+hnsd v2.0.0: `verify-registry` first succeeded at hnsd height 354180, as
+expected, since hnsd uses the tree commitment at 354168 only once 12 blocks
+sit on it. Every check from 354156 to 354178 returned `delegation_missing`.
+
+The ceremony then ran from 13:26:50 to 13:30:46 UTC with hnsd at 354180, the
+public RPC and the system clock:
+
+- `verify-registry` passed at safe block 53951999.
+- The buyer `0xd77193a3B794c70dC116b5F7Eeca0C59dEec9098` bought `studio.c22`
+  for one year through the verified CLI (approve
+  `0xe34e2e5d5bb12b2e83b63368fb36ab2fc99818c67f216c5623a230684b60feb6`,
+  purchase
+  `0x5a40369e34b9d02445917845474090355e00769f0e05f621d114c59692e4de07` in
+  block 53952761). The delegation was verified before and after confirmation.
+- An A record `192.0.2.22` and a TXT record were set, and `resolve` returned
+  the buyer as holder with both records at safe block 53952865.
+- The name was transferred to the operator
+  `0x7C10aD766F955Bcd6c9ED9CF548D707bf55a33d2` in
+  `0xeca58ad144f40b783992562a1593ff54203826092e461b089f84e798d929c069`, and
+  `resolve` returned the operator as holder with the records kept at safe
+  block 53953719.
+
+At that safe block the registry held 1 USDC and the buyer 18, down from 19.
+The `c22` delegation remains published as a test deployment.
