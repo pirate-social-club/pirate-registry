@@ -24,6 +24,9 @@ a18n are excluded.
 - `src/RegistryFactory.sol`: ownerless factory that deploys and initializes clones.
 - `src/Labels.sol`, `src/RecordKeys.sol`: label rules and record-key derivation.
 - `test/`: Foundry tests, including a mock USDC with blacklist and pause.
+- `script/Deploy.s.sol`: `DeployFactory` (pinned native USDC on Base and Base
+  Sepolia, a mock on local anvil) and `DeployRegistry`, which prints the
+  `_evm` delegation record to publish on the TLD.
 
 ## Local tests
 
