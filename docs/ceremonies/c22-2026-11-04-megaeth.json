@@ -1,0 +1,168 @@
+{
+  "ceremony": "c22",
+  "startedAt": "2026-11-04T15:15:30.976Z",
+  "manifestRelease": "megaeth-testnet-1",
+  "handshake": {
+    "network": "main",
+    "delegationRecord": "0xe56e25eaf86fb8bf641754fd7918735b98851744.6343._evm.",
+    "updateTransaction": "f860ac4676d3a0c2107fc52755267064a069fd0a0dfce348e09713453aa2a024",
+    "updateBlock": {
+      "height": 354290,
+      "hash": "000000000000000b588415110994796faae539b624dc40da249aa8a51aafb8a9"
+    }
+  },
+  "evm": {
+    "chainId": 6343,
+    "rpc": "https://carrot.megaeth.com/rpc",
+    "registry": "0xe56E25eAf86FB8BF641754Fd7918735B98851744",
+    "registryDeployTransaction": "0x2b5a8518cd7e8f0a3b856f83e6d62730b8c5fd627c338367457ef37c579b48f3"
+  },
+  "verifyRegistry": {
+    "tld": "c22",
+    "registry": "0xe56E25eAf86FB8BF641754Fd7918735B98851744",
+    "chainId": "6343",
+    "record": "0xe56e25eaf86fb8bf641754fd7918735b98851744.6343._evm.",
+    "manifestRelease": "megaeth-testnet-1",
+    "protocolVersion": 2,
+    "handshake": {
+      "source": "hnsd dns://127.0.0.1:27349",
+      "trust": "local-spv"
+    },
+    "block": {
+      "tag": "safe",
+      "number": "34094628",
+      "hash": "0xb19a2d8f7dc2b3631224bbb9ac7723e8aa4d7cba2654ea14c056c4f270d5ff9a",
+      "timestamp": "1793805084"
+    },
+    "evmTrust": "remote-rpc",
+    "clock": "system",
+    "hnsdHeight": 354328
+  },
+  "purchase": {
+    "tokenId": "48745484984263185816342369919263687260976893715955432144237427322362521358916",
+    "generation": "1",
+    "expiry": "1825341341",
+    "transaction": "0x5282b00a96cb2475e623aa596b25a205fe79dff8384a3c1839e863309c451a7a",
+    "delegationBefore": "0xe56e25eaf86fb8bf641754fd7918735b98851744.6343._evm.",
+    "delegationAfter": "verified",
+    "disclosures": [
+      "- The owner of .c22 on Handshake can repoint its delegation or let it lapse, which ends resolution while the NFT survives. Its Handshake renewal deadline is unknown from this source.",
+      "- This registry runs on chain 6343 (MegaETH testnet) and depends on its sequencer ordering, upgrade controls and finality.",
+      "- The payment token's issuer may be able to pause it or block the payer or the registry; either would block paid registrations, paid renewals and sweeps.",
+      "- The operator can change prices and reservations for future registrations at any time. This registration's annual price stays locked through transfers, grace and renewals, but a reservation can stop anyone except its claimant from registering the name again after it is released.",
+      "- There is no commit-reveal: another buyer can win a race for the same label. The maximum cost and deadline protect only the payment terms.",
+      "- The operator's revenue sits in the registry contract until someone sweeps it to the treasury.",
+      "- Records are public."
+    ]
+  },
+  "records": {
+    "aTransaction": "0xe32c58e67ce5e93c2e2b07b6037ae8c891ceb0d434b3f22b618f13e0f435013c",
+    "txtTransaction": "0x90e661ddb46d770a149bbe4dd894807069630e7fa30269199b73b50316cfe844"
+  },
+  "resolveAfterPurchase": {
+    "observedAt": {
+      "chainId": "6343",
+      "blockTag": "safe",
+      "blockNumber": "34095006",
+      "blockHash": "0x0d44d3a05be8e2becc523c91617bd978801217dc4ffe40e4b1801eeff3dd59e5",
+      "blockTimestamp": 1793805462,
+      "hostTime": 1793805586,
+      "clock": "system"
+    },
+    "handshake": {
+      "source": "hnsd dns://127.0.0.1:27349",
+      "trust": "local-spv",
+      "record": "0xe56e25eaf86fb8bf641754fd7918735b98851744.6343._evm."
+    },
+    "registry": {
+      "address": "0xe56E25eAf86FB8BF641754Fd7918735B98851744",
+      "factory": "0x702185797cD23E153fd0b83B672f969eA4aCfCc6",
+      "manifestRelease": "megaeth-testnet-1",
+      "protocolVersion": 2
+    },
+    "token": {
+      "label": "studiohq",
+      "tokenId": "48745484984263185816342369919263687260976893715955432144237427322362521358916",
+      "generation": "1",
+      "holder": "0x39943fc46312b031A57B9c2C54013f44052DD497",
+      "expiry": 1825341341
+    },
+    "records": {
+      "dns": {
+        "A": {
+          "ttl": 300,
+          "values": [
+            "192.0.2.22"
+          ]
+        },
+        "TXT": {
+          "ttl": 300,
+          "values": [
+            [
+              "pirate-registry ceremony 2026-11-04"
+            ]
+          ]
+        }
+      },
+      "text": {},
+      "addr": {}
+    },
+    "hnsdHeight": 354328
+  },
+  "transfer": {
+    "transaction": "0xb3ca7fb1279982dbcfe78953542db22cd442a9206d348f2676e1361890fec0d3",
+    "to": "0x274f223809F00CBdD51d05De3aBC8fd3368fDE16"
+  },
+  "resolveAfterTransfer": {
+    "observedAt": {
+      "chainId": "6343",
+      "blockTag": "safe",
+      "blockNumber": "34095303",
+      "blockHash": "0xa3bf366413fec6f90ebdc88b9dda4037e185581bc9123c4752bc6513ed00146a",
+      "blockTimestamp": 1793805759,
+      "hostTime": 1793805890,
+      "clock": "system"
+    },
+    "handshake": {
+      "source": "hnsd dns://127.0.0.1:27349",
+      "trust": "local-spv",
+      "record": "0xe56e25eaf86fb8bf641754fd7918735b98851744.6343._evm."
+    },
+    "registry": {
+      "address": "0xe56E25eAf86FB8BF641754Fd7918735B98851744",
+      "factory": "0x702185797cD23E153fd0b83B672f969eA4aCfCc6",
+      "manifestRelease": "megaeth-testnet-1",
+      "protocolVersion": 2
+    },
+    "token": {
+      "label": "studiohq",
+      "tokenId": "48745484984263185816342369919263687260976893715955432144237427322362521358916",
+      "generation": "1",
+      "holder": "0x274f223809F00CBdD51d05De3aBC8fd3368fDE16",
+      "expiry": 1825341341
+    },
+    "records": {
+      "dns": {
+        "A": {
+          "ttl": 300,
+          "values": [
+            "192.0.2.22"
+          ]
+        },
+        "TXT": {
+          "ttl": 300,
+          "values": [
+            [
+              "pirate-registry ceremony 2026-11-04"
+            ]
+          ]
+        }
+      },
+      "text": {},
+      "addr": {}
+    },
+    "hnsdHeight": 354330
+  },
+  "result": "passed",
+  "finishedAt": "2026-11-04T15:24:50.327Z"
+}

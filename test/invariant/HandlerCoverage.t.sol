@@ -28,7 +28,7 @@ contract HandlerCoverageTest is Test {
     }
 
     function _handlerFor(SLDRegistry registry) internal returns (RegistryHandler) {
-        return new RegistryHandler(registry, usdc, operator, treasuries);
+        return new RegistryHandler(registry, usdc, operator, treasuries, 5e6);
     }
 
     function test_FixedScenarioReachesEveryRequiredPath() public {
@@ -73,6 +73,34 @@ contract HandlerCoverageTest is Test {
         assertEq(h.sweepsSucceeded(), 2);
         assertEq(h.sweepsFailed(), 1);
         assertEq(h.forbiddenTransfers(), 0);
+    }
+
+    function test_FixedPolicyScenarioReachesEveryPolicyPath() public {
+        RegistryFactory factory = new RegistryFactory(address(usdc));
+        SLDRegistry registry = SLDRegistry(factory.deployRegistry("testtld", operator, treasuries[0], 5e6));
+        RegistryHandler h = _handlerFor(registry);
+
+        h.setLengthPrices(4, 3, 5e6, 0, false); // lengths 1 to 3 closed, 4 and longer at 5 USDC
+        h.register(3, 1, 0, 0); // "x" is closed: refused
+        h.setPremium(3, 2e6, false, false); // premium price opens "x"
+        h.setReservation(3, 1, false); // and reserves it for actor-1
+        h.register(3, 1, 0, 0); // actor-0 for itself: refused
+        h.register(3, 1, 2, 1); // actor-2 pays for actor-1
+        h.setLengthPrices(2, 0, 1e6, 0, true); // a rising table is refused
+        h.register(4, 1, 0, 0); // "community" sells at the last tier
+        h.setPremium(4, 0, true, false); // premium closes "community" for its next registration
+        h.renew(1, 1, 3); // the existing "community" still renews at its locked price
+
+        assertEq(h.mismatches(), 0, "model mismatch in policy scenario");
+        assertEq(h.closedRefusals(), 1);
+        assertEq(h.reservationRefusals(), 1);
+        assertEq(h.premiumRegistrations(), 1);
+        assertEq(h.reservedRegistrations(), 1);
+        assertEq(h.rejectedPriceTables(), 1);
+        assertEq(h.registrations(), 2);
+        assertEq(h.renewals(), 1);
+        assertEq(registry.lockedPrice(h.tokenAt(0)), 2e6);
+        assertEq(registry.lockedPrice(h.tokenAt(1)), 5e6);
     }
 
     function test_HandlerCatchesRegistryWithoutExpiryGuard() public {

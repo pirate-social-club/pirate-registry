@@ -1,6 +1,6 @@
 // Local acceptance (SPEC section 11.1). Starts anvil, hsd regtest and hnsd,
-// then runs the ten steps against the independent resolver. Needs free ports
-// 18545, 14037-14039, 25349-25350, 26349-26350 and the hnsd image
+// then runs steps 1 to 10, plus 7b for sale policy, against the independent
+// resolver. Needs free ports 18545, 14037-14039, 25349-25350, 26349-26350 and the hnsd image
 // (docker build -t pirate-registry-hnsd:v2.0.0-regtest harness/hnsd).
 // Usage: node harness/acceptance.ts
 import assert from 'node:assert/strict';
@@ -293,6 +293,36 @@ async function main() {
     await settle();
   });
 
+  await step('7b sale policy: an 8+ band closes short labels, a premium opens one, a reservation fixes its recipient', async () => {
+    await sdk.setLengthPrices(operator, registry, sdk.minLengthTable(8, USDC(5)));
+    await expectRevert(sdk.register(buyer, registry, { label: 'ceo', years: 1 }), 'short label in the 8+ band');
+    assert.equal((await sdk.quote(publicClient, registry, 'eightchr', 1)).cost, USDC(5));
+    const closed = cli(['check', '--rpc', ANVIL_URL, '--registry', registry, '--label', 'abc']);
+    assert.equal(closed.code, 0, closed.stderr);
+    assert.equal(closed.json?.forSale, false);
+    assert.equal(closed.json?.annualPrice, 'not for sale');
+
+    // Reserve before pricing: a premium on an unreserved label would open it to anyone first.
+    await sdk.setReservations(operator, registry, ['ceo'], [holderB.account.address]);
+    await expectRevert(sdk.register(buyer, registry, { label: 'ceo', years: 1, recipient: holderB.account.address }), 'reserved but still closed');
+    await sdk.setPremiumPrices(operator, registry, ['ceo'], [USDC(50)]);
+    await expectRevert(sdk.register(buyer, registry, { label: 'ceo', years: 1 }), 'reserved label for another recipient');
+    const ceo = await sdk.register(buyer, registry, { label: 'ceo', years: 1, recipient: holderB.account.address });
+    const locked = await publicClient.readContract({ address: registry, abi: registryAbi, functionName: 'lockedPrice', args: [ceo.tokenId] });
+    assert.equal(locked, USDC(50));
+    const owner = await publicClient.readContract({ address: registry, abi: registryAbi, functionName: 'ownerOf', args: [ceo.tokenId] });
+    assert.equal(owner, holderB.account.address);
+
+    const shown = cli(['policy', '--rpc', ANVIL_URL, '--registry', registry, '--label', 'ceo']);
+    assert.equal(shown.code, 0, shown.stderr);
+    const tiers = shown.json?.lengthPrices as Array<{ length: string; annualPrice: string }>;
+    assert.deepEqual(tiers.at(-1), { length: '8+', annualPrice: '5' });
+    assert.equal(tiers[0].annualPrice, 'not for sale');
+
+    await sdk.setPrice(operator, registry, USDC(5));
+    await settle();
+  });
+
   await step('8 repointing testtld to a second registry: the resolver follows it', async () => {
     const { registry: second } = await sdk.deployRegistry(operator, factory, {
       tld: 'testtld',
@@ -420,5 +450,5 @@ main()
     mkdirSync(RUN_DIR, { recursive: true });
     writeFileSync(new URL('acceptance-report.json', RUN_DIR), JSON.stringify({ at: new Date().toISOString(), results }, null, 2));
     const failed = results.filter((r) => !r.ok).length;
-    console.log(`\n${results.length - failed}/${results.length} steps passed${failed || results.length < 9 ? ' (incomplete)' : ''}`);
+    console.log(`\n${results.length - failed}/${results.length} steps passed${failed || results.length < 10 ? ' (incomplete)' : ''}`);
   });

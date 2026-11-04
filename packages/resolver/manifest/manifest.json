@@ -1,7 +1,7 @@
 {
-  "release": "base-sepolia-1",
-  "protocolVersion": 1,
-  "sourceCommit": "ba92e01460c83e840fbebe833678603c729116d0",
+  "release": "megaeth-testnet-1",
+  "protocolVersion": 2,
+  "sourceCommit": "245c83c854cdbf393b3df8dc7a6a2262c513d5a8",
   "compiler": {
     "solc": "0.8.30",
     "evmVersion": "cancun",
@@ -10,13 +10,13 @@
     "cborMetadata": false
   },
   "chains": {
-    "84532": {
-      "name": "base-sepolia",
-      "factory": "0xCC6420FE45F6596784B84fFD2b39B0333ab3ea7C",
-      "factoryCodeHash": "0x7842d7dbde2d18ab4cdf3744376190a2e616558c2213c5dae9d42e38b7bcf703",
-      "implementation": "0x8D576F531f1718eEf42183e954cE4323cD82F8Ac",
-      "implementationCodeHash": "0x081349664c5f921c937b5f798150b9121a713aca763d8f6886ea66c389088893",
-      "paymentToken": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+    "6343": {
+      "name": "megaeth-testnet",
+      "factory": "0x702185797cD23E153fd0b83B672f969eA4aCfCc6",
+      "factoryCodeHash": "0x4bd9541c1194d770625f54d998407c0a9ae539a0d8d32ab998e2d4da0fbe17e8",
+      "implementation": "0x1BFd3B5B227cfa1BD1E1bA8Acf2855B7fCDfDfdA",
+      "implementationCodeHash": "0x165fdfb3246f0ea9e4df8f1e9ce74f359ce907f20303dd65a5331539be186af0",
+      "paymentToken": "0xC5321666F425812D1C12F44dA7BFe08CEB00044B",
       "paymentTokenDecimals": 6
     }
   }

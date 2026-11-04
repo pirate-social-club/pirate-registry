@@ -17,8 +17,10 @@ contract FactoryTest is RegistryTestBase {
         assertEq(registry.tld(), TLD);
         assertEq(registry.admin(), operator);
         assertEq(registry.treasury(), treasury);
-        assertEq(registry.annualPrice(), PRICE);
-        assertEq(registry.PROTOCOL_VERSION(), 1);
+        uint256[] memory prices = registry.lengthPrices();
+        assertEq(prices.length, 1);
+        assertEq(prices[0], PRICE);
+        assertEq(registry.PROTOCOL_VERSION(), 2);
         assertEq(registry.name(), ".testtld");
 
         // Exact EIP-1167 runtime pointing at the factory's implementation.

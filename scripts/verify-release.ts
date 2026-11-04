@@ -10,13 +10,13 @@
 //
 // Usage:
 //   node scripts/verify-release.ts --rpc URL --factory ADDR [--commit SHA]
-//     [--name base-sepolia] [--write-manifest FILE] [--block safe|latest]
+//     [--name megaeth-testnet] [--write-manifest FILE] [--block safe|latest]
 import { spawnSync } from 'node:child_process';
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
-import { createPublicClient, getAddress, http, keccak256, pad, type Address, type Hex } from 'viem';
+import { createPublicClient, erc20Abi, getAddress, http, keccak256, pad, type Address, type Hex } from 'viem';
 import { factoryAbi, registryAbi } from '@pirate-registry/resolver';
 
 const ROOT = new URL('../', import.meta.url).pathname;
@@ -84,6 +84,10 @@ async function main() {
       client.readContract({ address, abi, functionName, blockNumber: block.number } as never) as Promise<T>;
     const implementation = getAddress(await read<Address>(factory, factoryAbi, 'implementation'));
     const paymentToken = getAddress(await read<Address>(factory, factoryAbi, 'paymentToken'));
+    const paymentTokenDecimals = Number(
+      await client.readContract({ address: paymentToken, abi: erc20Abi, functionName: 'decimals', blockNumber: block.number }),
+    );
+    const protocolVersion = Number(await read<number>(implementation, registryAbi, 'PROTOCOL_VERSION'));
     const onchainFactory = (await client.getCode({ address: factory, blockNumber: block.number })) as Hex;
     const onchainImplementation = (await client.getCode({ address: implementation, blockNumber: block.number })) as Hex;
 
@@ -140,7 +144,10 @@ async function main() {
       try {
         manifest = JSON.parse(readFileSync(path, 'utf8'));
       } catch {
-        manifest = { release: 'unreleased', protocolVersion: 1, sourceCommit: commit, compiler: report.compiler, chains: {} };
+        manifest = { release: 'unreleased', protocolVersion, sourceCommit: commit, compiler: report.compiler, chains: {} };
+      }
+      if (manifest.protocolVersion !== protocolVersion) {
+        throw new Error(`manifest is protocol ${manifest.protocolVersion}, deployed implementation is ${protocolVersion}`);
       }
       if (manifest.sourceCommit && manifest.sourceCommit !== commit && Object.keys(manifest.chains).length > 0) {
         throw new Error(`manifest already describes commit ${manifest.sourceCommit}; refusing to mix commits`);
@@ -154,7 +161,7 @@ async function main() {
         implementation,
         implementationCodeHash: report.implementationCodeHash,
         paymentToken,
-        paymentTokenDecimals: 6,
+        paymentTokenDecimals,
       };
       writeFileSync(path, `${JSON.stringify(manifest, null, 2)}\n`);
       console.error(`manifest entry for chain ${chainId} written to ${path}`);

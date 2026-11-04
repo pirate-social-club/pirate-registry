@@ -1,19 +1,25 @@
 # pirate-registry
 
 A permissionless Handshake SLD registry: anyone who controls a Handshake TLD
-can deploy an immutable registry on Base, sell second-level names as ERC-721
-tokens for USDC, and let anyone verify a name without PIRATE servers.
+can deploy an immutable registry on an EVM chain (MegaETH testnet in this
+release), sell second-level names as ERC-721 tokens for a pinned payment
+token, and let anyone verify a name without PIRATE servers.
 
-`docs/SPEC.md` is the normative baseline (revision 2, 2026-11-03, with D1 to
-D3 adopted: Base, a price fixed per registration generation, and payment into
-the registry with a separate permissionless `sweep()`). The reviewed draft and
-its review history are in the staging root at
+`docs/SPEC.md` is the normative baseline (revision 3, 2026-11-04): MegaETH
+testnet (D1), a price fixed per registration generation (D2), payment into
+the registry with a separate permissionless `sweep()` (D3), and operator sale
+policy for new registrations (D5): an annual price per label length, premium
+prices and reservations, after HNS.ID's `DefaultRegistrationStrategy`. The
+current app's 8+ open sale band is `--min-length 8` at deployment. The
+reviewed draft and its review history are in the staging root at
 `handoffs/pirate-registry-v1-spec-2026-11-03/`.
 
 ## Status
 
 This is an experiment under the workspace control plane's `experiments/`
-directory. It is not yet a registered canonical repository and has no remote.
+directory, published as `pirate-social-club/pirate-registry`. Base and Base
+Sepolia are no longer supported; the Base Sepolia release and the c22
+ceremony of 2026-11-03 remain as history in `docs/DEPLOYMENTS.md`.
 Milestone 1 is independent ownership and record lookup. DNS serving, the
 storefront and any `.pirate` migration are later work; `.pirate`, 8s28 and
 a18n are excluded.
@@ -29,9 +35,14 @@ a18n are excluded.
   `requireCanonical`) and its unit tests.
 - `packages/sdk/`: operator and buyer transactions and the `pirate-registry` CLI.
 - `harness/`: local acceptance (anvil, hsd regtest, hnsd in Docker).
-- `script/Deploy.s.sol`: `DeployFactory` (pinned native USDC on Base and Base
-  Sepolia, a mock on local anvil) and `DeployRegistry`, which prints the
-  `_evm` delegation record to publish on the TLD.
+- `script/Deploy.s.sol`: `DeployTestToken` (MegaETH testnet only),
+  `DeployFactory` (the pinned payment token on MegaETH testnet, a mock on
+  local anvil) and `DeployRegistry`, which prints the `_evm` delegation record
+  to publish on the TLD. `script/testnet/PirateTestUSD.sol` is the valueless
+  six-decimal test token.
+- `harness/testnet-rehearsal.ts`: MegaETH testnet rehearsal with a local
+  regtest TLD, the 8+ band, a premium and a reserved label, recording gas and
+  block-tag lag.
 
 ## Local tests
 

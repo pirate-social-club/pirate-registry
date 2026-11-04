@@ -16,6 +16,8 @@ contract RegistryHandler is Test {
     uint256 internal constant YEAR = 365 days;
     uint256 internal constant GRACE = 30 days;
     uint256 internal constant MAX_REMAINING = 3650 days;
+    // Sale policy model (SPEC 6.2), likewise written here.
+    uint256 internal constant NOT_FOR_SALE = type(uint256).max;
 
     enum Mismatch {
         None,
@@ -26,7 +28,8 @@ contract RegistryHandler is Test {
         RecordOutcome,
         ManagerOutcome,
         OperatorSeizure,
-        ManagerSurvivedTransfer
+        ManagerSurvivedTransfer,
+        PolicyOutcome
     }
 
     SLDRegistry public immutable registry;
@@ -47,6 +50,10 @@ contract RegistryHandler is Test {
     mapping(uint256 tokenId => bytes32) public ghostLabelhash;
     mapping(bytes32 labelhash => uint64) public ghostGeneration;
     mapping(address owner => mapping(address operator => bool)) public ghostApprovedForAll;
+    uint256[] internal _ghostLengthPrices;
+    mapping(bytes32 labelhash => bool) public ghostPremiumSet;
+    mapping(bytes32 labelhash => uint256) public ghostPremium;
+    mapping(bytes32 labelhash => address) public ghostReservation;
 
     uint256 public paid;
     uint256 public deposits;
@@ -68,12 +75,24 @@ contract RegistryHandler is Test {
     uint256 public managerRecordWrites;
     uint256 public sweepsSucceeded;
     uint256 public sweepsFailed;
+    uint256 public premiumRegistrations;
+    uint256 public reservedRegistrations;
+    uint256 public reservationRefusals;
+    uint256 public closedRefusals;
+    uint256 public rejectedPriceTables;
 
-    constructor(SLDRegistry registry_, MockUSDC usdc_, address operator_, address[] memory treasuries_) {
+    constructor(
+        SLDRegistry registry_,
+        MockUSDC usdc_,
+        address operator_,
+        address[] memory treasuries_,
+        uint256 initialPrice
+    ) {
         registry = registry_;
         usdc = usdc_;
         operator = operator_;
         _treasuries = treasuries_;
+        _ghostLengthPrices.push(initialPrice);
         _actors.push(makeAddr("actor-0"));
         _actors.push(makeAddr("actor-1"));
         _actors.push(makeAddr("actor-2"));
@@ -81,6 +100,10 @@ contract RegistryHandler is Test {
         _labels.push("studio");
         _labels.push("alpha");
         _labels.push("beta");
+        _labels.push("x");
+        _labels.push("community");
+        _labels.push("ab");
+        _labels.push("abc");
         for (uint256 i; i < _actors.length; ++i) {
             usdc.mint(_actors[i], 1e15);
             vm.prank(_actors[i]);
@@ -104,6 +127,14 @@ contract RegistryHandler is Test {
         uint64 generation = ghostGeneration[labelhash];
         if (generation == 0) return true;
         return modelStatus(registry.tokenIdFor(labelhash, generation)) == SLDRegistry.Status.Released;
+    }
+
+    /// Premium price if set, otherwise the length tier; the last tier covers
+    /// every longer label.
+    function modelPrice(bytes32 labelhash, uint256 length) public view returns (uint256) {
+        if (ghostPremiumSet[labelhash]) return ghostPremium[labelhash];
+        uint256 tiers = _ghostLengthPrices.length;
+        return _ghostLengthPrices[length < tiers ? length - 1 : tiers - 1];
     }
 
     function _check(bool expected, bool actual, Mismatch kind) internal {
@@ -153,8 +184,11 @@ contract RegistryHandler is Test {
         bytes32 labelhash = keccak256(bytes(label));
         uint8 years_ = uint8(bound(yearsSeed, 1, 5));
         address recipient = _actor(recipientSeed);
-        uint256 price = registry.annualPrice();
-        bool allowed = _modelLabelAvailable(labelhash);
+        uint256 price = modelPrice(labelhash, bytes(label).length);
+        address claimant = ghostReservation[labelhash];
+        bool available = _modelLabelAvailable(labelhash);
+        bool reservedElsewhere = claimant != address(0) && claimant != recipient;
+        bool allowed = available && !reservedElsewhere && price != NOT_FOR_SALE;
         uint64 previous = ghostGeneration[labelhash];
 
         vm.prank(_actor(buyerSeed));
@@ -173,8 +207,12 @@ contract RegistryHandler is Test {
             _tokens.push(id);
             ++registrations;
             if (generation > 1) ++reRegistrations;
+            if (ghostPremiumSet[labelhash]) ++premiumRegistrations;
+            if (claimant != address(0)) ++reservedRegistrations;
         } catch {
             _check(allowed, false, Mismatch.RegisterOutcome);
+            if (available && reservedElsewhere) ++reservationRefusals;
+            else if (available && price == NOT_FOR_SALE) ++closedRefusals;
         }
     }
 
@@ -345,8 +383,76 @@ contract RegistryHandler is Test {
     }
 
     function setPrice(uint64 priceSeed) public {
+        uint256 price = bound(priceSeed, 0, 100e6);
         vm.prank(operator);
-        registry.setPrice(bound(priceSeed, 0, 100e6));
+        registry.setPrice(price);
+        delete _ghostLengthPrices;
+        _ghostLengthPrices.push(price);
+    }
+
+    /// A non-increasing table of 1 to 4 tiers whose shortest lengths may be
+    /// closed, or, when `rising`, a table whose last tier rises and must be
+    /// refused.
+    function setLengthPrices(uint8 tiersSeed, uint8 closedSeed, uint64 baseSeed, uint32 stepSeed, bool rising) public {
+        uint256 tiers = bound(tiersSeed, 1, 4);
+        uint256 closed = bound(closedSeed, 0, tiers - 1);
+        uint256 base = bound(baseSeed, 0, 100e6);
+        uint256 step = bound(stepSeed, 0, 10e6);
+        uint256[] memory prices = new uint256[](tiers);
+        for (uint256 i; i < tiers; ++i) {
+            prices[i] = i < closed ? NOT_FOR_SALE : base + (tiers - 1 - i) * step;
+        }
+        bool valid = true;
+        if (rising && tiers > 1 && prices[tiers - 2] != NOT_FOR_SALE) {
+            prices[tiers - 1] = prices[tiers - 2] + 1;
+            valid = false;
+        }
+        vm.prank(operator);
+        try registry.setLengthPrices(prices) {
+            _check(valid, true, Mismatch.PolicyOutcome);
+            _ghostLengthPrices = prices;
+        } catch {
+            _check(valid, false, Mismatch.PolicyOutcome);
+            ++rejectedPriceTables;
+        }
+    }
+
+    function setPremium(uint256 labelSeed, uint64 priceSeed, bool closed, bool clear) public {
+        string[] memory labels = new string[](1);
+        labels[0] = _labels[labelSeed % _labels.length];
+        bytes32 labelhash = keccak256(bytes(labels[0]));
+        vm.startPrank(operator);
+        if (clear) {
+            try registry.clearPremiumPrices(labels) {
+                ghostPremiumSet[labelhash] = false;
+                ghostPremium[labelhash] = 0;
+            } catch {
+                _check(true, false, Mismatch.PolicyOutcome);
+            }
+        } else {
+            uint256[] memory prices = new uint256[](1);
+            prices[0] = closed ? NOT_FOR_SALE : bound(priceSeed, 0, 100e6);
+            try registry.setPremiumPrices(labels, prices) {
+                ghostPremiumSet[labelhash] = true;
+                ghostPremium[labelhash] = prices[0];
+            } catch {
+                _check(true, false, Mismatch.PolicyOutcome);
+            }
+        }
+        vm.stopPrank();
+    }
+
+    function setReservation(uint256 labelSeed, uint256 claimantSeed, bool clear) public {
+        string[] memory labels = new string[](1);
+        labels[0] = _labels[labelSeed % _labels.length];
+        address[] memory claimants = new address[](1);
+        claimants[0] = clear ? address(0) : _actor(claimantSeed);
+        vm.prank(operator);
+        try registry.setReservations(labels, claimants) {
+            ghostReservation[keccak256(bytes(labels[0]))] = claimants[0];
+        } catch {
+            _check(true, false, Mismatch.PolicyOutcome);
+        }
     }
 
     function setTreasury(uint256 treasurySeed) public {

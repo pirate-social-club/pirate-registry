@@ -131,6 +131,13 @@ export async function verifyRegistry(
     reader.getCode(chain.implementation),
     reader.getCode(chain.factory),
   ]);
+  if (registryCode === '0x') {
+    // Also the state right after a deployment, until it reaches the selected block tag.
+    throw new ResolveError(
+      'code_mismatch',
+      `${delegation.registry} has no code at ${reader.block.tag} block ${reader.block.number}; a new deployment is visible only once that block tag covers it`,
+    );
+  }
   if (registryCode.toLowerCase() !== expectedCloneRuntime(chain.implementation)) {
     throw new ResolveError('code_mismatch', `${delegation.registry} is not a clone of the manifest implementation`);
   }
