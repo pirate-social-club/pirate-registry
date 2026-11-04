@@ -1,10 +1,11 @@
-// Real Handshake ceremony (SPEC 11.2): a mainnet TLD delegated to a Base
-// Sepolia registry. Runs only after the independent resolver verifies the
-// delegation; it refuses to buy otherwise. Drives the user-facing CLI and
-// writes an evidence file.
+// Real Handshake ceremony (SPEC 11.2): a mainnet TLD delegated to a testnet
+// registry (MegaETH testnet, 6343, since release megaeth-testnet-1; the c22
+// ceremony of 2026-11-03 used Base Sepolia). Runs only after the independent
+// resolver verifies the delegation; it refuses to buy otherwise. Drives the
+// user-facing CLI and writes an evidence file.
 //
 // Environment: BUYER_PRIVATE_KEY, BUYER_ADDRESS, OPERATOR_ADDRESS (transfer
-// recipient), BASE_SEPOLIA_RPC_URL.
+// recipient), REGISTRY_RPC_URL and REGISTRY_CHAIN_ID.
 // Usage: node harness/ceremony.ts --tld c22 --registry ADDR --hnsd HOST:PORT
 //   --label studio --handshake-tx TXID --handshake-height N --handshake-block HASH
 //   --registry-deploy-tx HASH --out FILE [--hnsd-container NAME]
@@ -35,11 +36,12 @@ const { values } = parseArgs({
 for (const key of ['tld', 'registry', 'hnsd', 'handshake-tx', 'handshake-height', 'handshake-block', 'registry-deploy-tx', 'out'] as const) {
   if (!values[key]) throw new Error(`--${key} is required`);
 }
-for (const key of ['BUYER_PRIVATE_KEY', 'BUYER_ADDRESS', 'OPERATOR_ADDRESS', 'BASE_SEPOLIA_RPC_URL']) {
+for (const key of ['BUYER_PRIVATE_KEY', 'BUYER_ADDRESS', 'OPERATOR_ADDRESS', 'REGISTRY_RPC_URL', 'REGISTRY_CHAIN_ID']) {
   if (!process.env[key]) throw new Error(`${key} must be set`);
 }
 
-const RPC = process.env.BASE_SEPOLIA_RPC_URL as string;
+const RPC = process.env.REGISTRY_RPC_URL as string;
+const CHAIN_ID = Number(process.env.REGISTRY_CHAIN_ID);
 const client = createPublicClient({ transport: http(RPC) });
 const tld = values.tld as string;
 const registry = values.registry as `0x${string}`;
@@ -51,11 +53,11 @@ const evidence: Record<string, unknown> = {
   manifestRelease: loadManifest().release,
   handshake: {
     network: 'main',
-    delegationRecord: formatDelegation(registry, 84532),
+    delegationRecord: formatDelegation(registry, CHAIN_ID),
     updateTransaction: values['handshake-tx'],
     updateBlock: { height: Number(values['handshake-height']), hash: values['handshake-block'] },
   },
-  evm: { chainId: 84532, rpc: RPC, registry, registryDeployTransaction: values['registry-deploy-tx'] },
+  evm: { chainId: CHAIN_ID, rpc: RPC, registry, registryDeployTransaction: values['registry-deploy-tx'] },
 };
 
 function cli(args: string[]) {
@@ -125,7 +127,7 @@ const resolveSummary = (r: Record<string, unknown>) => {
 
 async function main() {
   // Gate 2: the independent resolver must verify the delegation first.
-  const verified = await cliRetrying(['verify-registry', '--tld', tld, ...source, '--chain-rpc', `84532=${RPC}`], 'verify');
+  const verified = await cliRetrying(['verify-registry', '--tld', tld, ...source, '--chain-rpc', `${CHAIN_ID}=${RPC}`], 'verify');
   assert.equal(verified.code, 0, `delegation not verified: ${verified.stdout}${verified.stderr}`);
   evidence.verifyRegistry = { ...verified.json, hnsdHeight: hnsdHeight() };
   console.log(`verified ${tld} -> ${registry}`);
@@ -144,7 +146,7 @@ async function main() {
   evidence.records = { aTransaction: a.json?.transaction, txtTransaction: txt.json?.transaction };
   await waitForSafe(txt.json?.transaction as Hex, 'record update');
 
-  const first = await cliRetrying(['resolve', '--name', name, ...source, '--chain-rpc', `84532=${RPC}`], 'resolve');
+  const first = await cliRetrying(['resolve', '--name', name, ...source, '--chain-rpc', `${CHAIN_ID}=${RPC}`], 'resolve');
   assert.equal(first.code, 0, first.stdout + first.stderr);
   const firstAnswer = first.json as { token: { holder: string }; records: { dns: Record<string, { values: unknown[] }> }; observedAt: { clock: string } };
   assert.equal(firstAnswer.token.holder.toLowerCase(), (process.env.BUYER_ADDRESS as string).toLowerCase());
@@ -158,7 +160,7 @@ async function main() {
   evidence.transfer = { transaction: moved.json?.transaction, to: process.env.OPERATOR_ADDRESS };
   await waitForSafe(moved.json?.transaction as Hex, 'transfer');
 
-  const second = await cliRetrying(['resolve', '--name', name, ...source, '--chain-rpc', `84532=${RPC}`], 'resolve');
+  const second = await cliRetrying(['resolve', '--name', name, ...source, '--chain-rpc', `${CHAIN_ID}=${RPC}`], 'resolve');
   assert.equal(second.code, 0, second.stdout + second.stderr);
   const secondAnswer = second.json as { token: { holder: string }; records: { dns: Record<string, { values: unknown[] }> } };
   assert.equal(secondAnswer.token.holder.toLowerCase(), (process.env.OPERATOR_ADDRESS as string).toLowerCase());

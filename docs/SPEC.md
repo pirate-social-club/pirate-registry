@@ -1,10 +1,13 @@
 # PIRATE Registry V1: normative specification
 
-Status: implementation baseline, revision 2, 2026-11-03. The workspace_owner
-gave the go-ahead to start implementation on 2026-11-03, which adopts D1 to
-D3; D4 follows from spec 014. Implementation is in progress under the
-control plane's `experiments/pirate-registry`; it is not yet a registered
-repository.
+Status: implementation baseline, revision 3, 2026-11-04. The workspace_owner
+gave the go-ahead to start implementation on 2026-11-03, which adopted D1 to
+D3; D4 follows from spec 014. Revision 3 follows the workspace_owner's
+2026-11-04 instruction for the decentralized experiment: it moves the
+registry from Base to MegaETH testnet (D1) and adds operator sale policy
+modeled on HNS.ID (D5). The repository is
+`pirate-social-club/pirate-registry`, registered with the control plane as
+`experiments/pirate-registry`.
 
 The key words MUST, MUST NOT, SHOULD and MAY are used as in RFC 2119.
 
@@ -17,9 +20,10 @@ own registry contract, and lets anyone verify a name without PIRATE servers.
 The product promise is independence from PIRATE custody and servers. It is not
 independence from every party. A buyer still depends on the Handshake TLD
 owner, who can repoint delegation or let the TLD lapse; on the chain, its
-sequencer, its upgrade controls and its finality configuration; and on Circle,
-which can pause USDC or blacklist the payer or the registry. Section 9 makes
-these disclosures mandatory.
+sequencer, its upgrade controls and its finality configuration; on the
+payment token's issuer, where the token has one that can pause it or block
+accounts; and on the operator's sale policy for future registrations. Section
+9 makes these disclosures mandatory.
 
 Milestone 1, the subject of this document, is independent ownership and record
 lookup. Serving DNS answers to ordinary resolvers is a later deliverable.
@@ -36,14 +40,18 @@ token ID. Year means 365 days of block timestamps.
 
 | ID | Decision | Status |
 |---|---|---|
-| D1 | Chain is Base (8453), with Base Sepolia (84532) for testing. The chain ID is explicit in the delegation record. | Adopted 2026-11-03 |
+| D1 | Chain is MegaETH testnet (6343) for this experiment; the mainnet chain and payment asset are not chosen. Base (8453) and Base Sepolia (84532) are no longer supported; release base-sepolia-1 and the c22 ceremony of 2026-11-03 remain as history in `docs/DEPLOYMENTS.md`. The chain ID is explicit in the delegation record. | Adopted 2026-11-03 for Base; revised 2026-11-04 |
 | D2 | A registration's annual price is fixed for the life of its generation, through transfers and grace. | Adopted 2026-11-03 |
 | D3 | The registry receives payments. A separate, permissionless `sweep()` forwards the balance to the treasury. | Adopted 2026-11-03 |
 | D4 | `.pirate` is excluded until a separately ratified migration preserves existing persona ownership (spec 014, 2026-08-24 amendment). 8s28 and a18n are excluded because PIRATE renewal freezes their zones. | Required by spec 014 |
+| D5 | Operators set a sale policy for new registrations only: an annual price per label length, a premium price per label and a reservation per label, after HNS.ID's `DefaultRegistrationStrategy`. No discounts, signed vouchers, allowlists or pause. | Adopted 2026-11-04 |
 
-Shared OP Stack ancestry does not make Base's sequencing, upgrade controls or
-finality configuration the same as Optimism's. They are Base-specific
-dependencies.
+MegaEVM builds on Optimism Isthmus (Ethereum Prague) and adds its own gas
+model: compute plus storage gas, a 60,000 intrinsic minimum, 98/100 call-gas
+forwarding and per-transaction resource limits. Clients MUST take gas
+estimates from the chain's RPC rather than from a local EVM. Shared OP Stack
+ancestry does not make MegaETH's sequencing, upgrade controls or finality the
+same as Optimism's; they are MegaETH-specific dependencies.
 
 ## 4. Authority model
 
@@ -84,7 +92,7 @@ The record is a Handshake NS record whose target has exactly three labels:
 <address>.<chainId>._evm.
 ```
 
-Example: `0x5fbdb2315678afecb367f032d93f642f64180aa3.8453._evm.`
+Example: `0x5fbdb2315678afecb367f032d93f642f64180aa3.6343._evm.`
 
 - `<address>` is `0x` followed by 40 hexadecimal digits. Parsers MUST accept
   any letter case, MUST NOT require an EIP-55 checksum, and MUST compare the
@@ -114,7 +122,8 @@ deploys the implementation and stores it, together with the chain's payment
 token, as immutables. The implementation's constructor disables initializers.
 
 `deployRegistry(tld, admin, treasury, annualPrice)` validates `tld` with the
-label rules (section 6.3), deploys an EIP-1167 clone of the implementation,
+label rules (section 6.3), deploys an EIP-1167 clone of the implementation
+whose price table starts as the single tier `annualPrice`,
 initializes it in the same call, records `isRegistry[clone] = true`, and emits
 `RegistryDeployed(registry, tld, admin, deployer)`. Creation and initialization
 MUST be atomic. Initialization MUST be single-use and MUST record
@@ -128,19 +137,44 @@ none may expose an upgrade function.
 ### 6.2 Configuration and operator powers
 
 Each registry stores `tld`, `paymentToken`, `factory`, `admin`,
-`pendingAdmin`, `treasury` and `annualPrice`, and exposes
-`PROTOCOL_VERSION`. The operator has exactly these powers:
+`pendingAdmin`, `treasury` and its sale policy, and exposes
+`PROTOCOL_VERSION`, which is 2 from revision 3. The operator has exactly these
+powers:
 
-- `setPrice(annualPrice)` changes the price for future registrations only. Zero
-  is allowed.
+- Sale policy (D5), read only when a label's next generation is registered.
+  It follows the model of HNS.ID's `DefaultRegistrationStrategy`
+  (namebasehq/handshake-contracts f249cc8, MIT), adapted to payment-token
+  units, years, labelhash keys and admin authority. `NOT_FOR_SALE` is
+  `type(uint256).max`. Zero is a valid price everywhere.
+  - `setLengthPrices(prices)` sets 1 to 10 annual prices by label length:
+    `prices[i]` applies to labels of length `i + 1` and the last entry to
+    every longer label. Entries MUST NOT rise with length. `NOT_FOR_SALE`
+    closes a length. `setPrice(annualPrice)` is shorthand for a one-entry
+    table.
+  - `setPremiumPrices(labels, prices)` sets per-label annual prices that
+    override the table, and `NOT_FOR_SALE` closes the label.
+    `clearPremiumPrices(labels)` removes them.
+  - `setReservations(labels, claimants)` reserves each label for one claimant,
+    and the zero address releases it. A reserved label can be registered only
+    with its claimant as `recipient`; anyone may pay.
+  - The current app's open sale band of 8 or more characters is the table of
+    seven `NOT_FOR_SALE` entries followed by the price. Shorter labels then
+    sell only with a premium price, and a reserved short label needs one.
 - `setTreasury(treasury)` changes the sweep destination. It MUST reject the
   zero address and the registry's own address, and MUST NOT move funds.
 - `transferAdmin(newAdmin)` followed by `acceptAdmin()` from `newAdmin` hands
   off admin in two steps. V1 has no `renounceAdmin`.
 
-There MUST be no pause, no public or administrator burn, no record override,
-no token transfer power, no rescue function and no arbitrary call. The contract
-MUST NOT accept ETH.
+Sale policy MUST NOT change any existing generation's locked price, expiry,
+holder, record manager or records, and `renew` MUST NOT consult it. A
+reservation or closed price set on a label whose current generation is Active
+or in Grace takes effect only once that generation is Released, so it can
+decide who registers the label next. Closing every length stops new
+registrations only.
+
+There MUST be no pause of renewals, transfers or record edits, no public or
+administrator burn, no record override, no token transfer power, no rescue
+function and no arbitrary call. The contract MUST NOT accept ETH.
 
 ### 6.3 Labels
 
@@ -189,8 +223,12 @@ or administrator burn.
 `register(label, years_, recipient, maxCost, deadline)` MUST revert unless
 `block.timestamp <= deadline`, the label is valid, `years_` is 1 to 5,
 `recipient` is not zero, and the label is unregistered or its current token is
-Released. The cost is `annualPrice * years_`, and MUST NOT exceed `maxCost`.
-The new token's locked price is the current `annualPrice`. The order is: write
+Released. The label's annual price is its premium price if one is set,
+otherwise its length tier (section 6.2). The call MUST revert with
+`NotForSale` when that price is `NOT_FOR_SALE`, and with `Reserved(claimant)`
+when the label is reserved for a claimant other than `recipient`. The cost is
+the annual price times `years_`, and MUST NOT exceed `maxCost`. The new
+token's locked price is that annual price. The order is: write
 all state, pull payment from `msg.sender` into the registry, then `_safeMint`
 to `recipient`. The function is `nonReentrant` and returns the token ID.
 
@@ -207,10 +245,13 @@ gas.
 
 ### 6.7 Payments and sweep
 
-The payment token is native USDC with 6 decimals, pinned per chain in the
-manifest. Base mainnet is `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`. Base
-Sepolia is `0x036CbD53842c5426634e7929541eC2318f3dCF7e`. These were checked
-against Circle's published address list on 2026-11-03.
+The payment token is pinned per chain in the manifest with its decimals,
+which clients read from the chain. On MegaETH testnet it is `PirateTestUSD`
+("Pirate Registry Test USD (testnet, no value)", symbol `ptUSD`, 6 decimals),
+deployed from `script/testnet/PirateTestUSD.sol`. It has open minting of up to
+10,000 units per call, no pause and no blacklist, and its constructor refuses
+every chain except MegaETH testnet and local anvil. Its address is in
+`docs/DEPLOYMENTS.md`. The mainnet payment asset is not chosen.
 
 Payments use SafeERC20 `safeTransferFrom(payer, registry, cost)`.
 `register` and `renew` MUST NOT call `sweep()` or depend on its success, so a
@@ -223,9 +264,10 @@ unswept revenue therefore follows the treasury: changing the treasury redirects
 everything not yet swept. Tokens other than the payment token sent to a
 registry are unrecoverable.
 
-USDC's `transferFrom` checks the caller, the sender and the recipient against
-the blacklist. A blacklisted registry, or a global USDC pause, blocks every
-operation that moves USDC: paid registrations, paid renewals and sweeps. It
+A token whose issuer can blacklist or pause, such as Circle's USDC, whose
+`transferFrom` checks the caller, the sender and the recipient, can block
+every operation that moves it: a blacklisted registry or a global pause blocks
+paid registrations, paid renewals and sweeps. It
 does not block zero-cost registrations or renewals, NFT transfers or record
 edits. Paying another holder's renewal works only when both the payer and the
 registry can transact.
@@ -314,7 +356,9 @@ but are not followed in milestone 1.
 `Registered(labelhash, label, tokenId, generation, recipient, expiry,
 lockedPrice)`, `Renewed(tokenId, expiry, payer, cost)`,
 `RecordSet(tokenId, key, value)`, `RecordManagerSet(tokenId, manager)`,
-`PriceChanged(annualPrice)`, `TreasuryChanged(treasury)`,
+`LengthPricesChanged(prices)`, `PremiumPriceSet(labelhash, label, price)`,
+`PremiumPriceCleared(labelhash, label)`,
+`ReservationSet(labelhash, label, claimant)`, `TreasuryChanged(treasury)`,
 `Swept(treasury, amount)`, `AdminTransferStarted(pending)` and
 `AdminTransferred(previous, next)`. `RecordSet` carries the full value, so
 clients can list records from logs without an indexer.
@@ -334,6 +378,10 @@ interface ISLDRegistry {
     function sweep() external;
 
     function setPrice(uint256 annualPrice) external;
+    function setLengthPrices(uint256[] calldata prices) external;
+    function setPremiumPrices(string[] calldata labels, uint256[] calldata prices) external;
+    function clearPremiumPrices(string[] calldata labels) external;
+    function setReservations(string[] calldata labels, address[] calldata claimants) external;
     function setTreasury(address treasury) external;
     function transferAdmin(address newAdmin) external;
     function acceptAdmin() external;
@@ -342,6 +390,10 @@ interface ISLDRegistry {
     function paymentToken() external view returns (address);
     function factory() external view returns (address);
     function available(string calldata label) external view returns (bool);
+    function lengthPrices() external view returns (uint256[] memory);
+    function priceOf(string calldata label) external view returns (uint256);
+    function premiumPriceOf(string calldata label) external view returns (bool set, uint256 price);
+    function reservedFor(string calldata label) external view returns (address);
     function currentToken(string calldata label)
         external view returns (uint256 tokenId, uint64 generation, Status status);
     function status(uint256 tokenId) external view returns (Status);
@@ -432,14 +484,19 @@ Before any purchase, every client, including the CLI, MUST show:
 1. The TLD owner can repoint delegation or let the TLD lapse, which ends
    resolution while the NFT survives. Show the Handshake renewal deadline when
    known.
-2. The chain dependency: Base's sequencer ordering, its upgrade controls and
-   its finality.
-3. Circle can pause USDC or blacklist the payer or the registry. Either blocks
+2. The chain dependency: the chain's sequencer ordering, its upgrade controls
+   and its finality, naming the chain (MegaETH testnet in this release).
+3. The payment token's issuer may be able to pause it or block the payer or
+   the registry. Either blocks
    paid registrations, paid renewals and sweeps.
 4. There is no commit-reveal. Another buyer can win a race for the same label.
    `maxCost` and `deadline` protect only the payment terms.
 5. The operator's revenue sits in the registry until someone sweeps it.
 6. Records are public.
+7. The operator can change prices and reservations for future registrations
+   at any time. This registration's annual price stays locked through
+   transfers, Grace and renewals, but a reservation can stop anyone except its
+   claimant from registering the label again after it is Released.
 
 ## 10. Security requirements and tests
 
@@ -468,12 +525,21 @@ Foundry unit, fuzz and invariant tests MUST cover:
 - a contract recipient without `onERC721Received` causing the whole purchase,
   payment included, to revert;
 - every admin function called by a non-admin, and the two-step admin handoff;
+- sale policy: tier lookup by length with the last tier covering longer
+  labels, the 8+ band refusing shorter labels, `NOT_FOR_SALE` tiers and
+  premiums, a free premium, clearing a premium, the 10-entry cap and the
+  non-rising rule, reservations refusing other recipients while letting any
+  payer pay for the claimant, a reservation on an Active name affecting only
+  the next registration, policy changes leaving every existing generation's
+  locked price, expiry and renewals unchanged, invalid labels and mismatched
+  arrays rejected, and the policy events;
 - invariants: no reachable path moves, burns or changes the records of an
   Active token without the holder's applicable authorization (the holder, a
   per-token approval or a collection operator for transfers; the holder or the
   current record manager for records), and the admin role grants none of
   these; the registry's payment-token balance equals payments received plus
-  unsolicited deposits minus sweeps;
+  unsolicited deposits minus sweeps; quoted prices and reservations equal an
+  independent model of the policy;
 - the factory: atomic initialization, a second `initialize` reverting on clones
   and on the implementation, and invalid TLDs rejected.
 
@@ -506,6 +572,9 @@ integration tests document). It generates a local manifest and then:
    token ID, no records, a Superseded old token, and a failing `renew` on the
    old token ID;
 7. exercises the treasury and registry blacklist cases and the sweep;
+   7b. sets the 8+ band and refuses a short label, opens one with a premium
+   price, reserves it for a holder, refuses another recipient, sells it to the
+   claimant with another payer, and reports the policy through the CLI;
 8. repoints the TLD to a second registry, and the resolver follows it;
 9. runs forged delegations (non-clone contract, unknown implementation, wrong
    TLD, wrong chain, two `_evm` records, a malformed record) and gets each
@@ -517,8 +586,11 @@ integration tests document). It generates a local manifest and then:
 
 The ceremony runs after local acceptance passes, and needs owner actions: a
 fresh Handshake TLD never used by PIRATE (not `.pirate`, 8s28 or a18n), a Bob
-wallet, an operator wallet with a little Base ETH, and a buyer wallet with USDC
-and ETH. Its network, Base Sepolia or Base mainnet, is owner-open.
+wallet and an operator wallet with a little MegaETH testnet ETH, whose faucet
+needs a person to pass its verification step. The operator can fund a
+throwaway buyer with test ETH and mint it the test token. The c22 ceremony of
+2026-11-03 ran against Base Sepolia (release base-sepolia-1); repointing c22
+to MegaETH testnet is a separate Handshake transaction.
 
 The steps are: deploy the factory and a registry; publish the `_evm` record
 from Bob and wait for it to reach resolvers. A full node serves it after the
@@ -538,7 +610,7 @@ model of `handover`; resolver support in the Freedom browser; the four-screen
 storefront as a static site; and a `.pirate` migration under a separately
 ratified contract that preserves spec 014 ownership.
 
-Excluded from V1: commit-reveal, price tiers, reserved-label lists,
+Excluded from V1: commit-reveal, discounts, signed vouchers or allowlists,
 internationalized names, on-chain metadata, an indexer, wallet creation, MPC,
 passkeys, ZK personas, Spaces and governance.
 
@@ -546,20 +618,27 @@ passkeys, ZK personas, Spaces and governance.
 
 Registration ordering: without commit-reveal, the sequencer, a leaky RPC
 provider or a faster buyer can win a label first. Parent control: the TLD owner
-can repoint or lapse. Payment-token control: Circle can pause or blacklist.
-Chain control: Base's operators and upgrade keys. Remote RPC trust whenever a
+can repoint or lapse. Payment-token control: the issuer, where the token has
+one. Chain control: MegaETH's sequencer, proposers and upgrade keys; testnet
+state may also be rolled back. Operator policy: the operator can reprice or
+reserve labels for future registrations, including labels whose current
+generation may later be Released. Remote RPC trust whenever a
 user does not run their own node. DNS reach: resolvers without `_evm` support
 cannot resolve these names until the adapter ships.
 
 ## 14. Open items
 
-The ceremony network is Base Sepolia. The public endpoint
-`https://sepolia.base.org` accepted an EIP-1898 read with `requireCanonical`
-on 2026-11-03; other providers are unchecked. On 2026-11-03 two samples of Base
-Sepolia's safe head showed lags of about 41 minutes (by block count) and 4
-minutes (by timestamp), so the 15-minute `safe` freshness default may fail
-intermittently and must be measured in the harness. The
+The registry network is MegaETH testnet. On 2026-11-04 the public endpoint
+`https://carrot.megaeth.com/rpc` reported chain 6343 (client
+`mega-reth/v2.2.2`) with about one block per second. `safe` trailed `latest`
+by about 280 seconds and `finalized` by about 1,930 seconds, so the 15-minute
+`safe` freshness default holds while `finalized` reads need a `--max-age`
+longer than about 32 minutes. It answered `eth_getCode` and `eth_call` at the safe
+block's hash with `requireCanonical: true` and refused an unknown hash
+(`-32001 block not found`). Other providers are unchecked. MegaETH documents
+that testnet state may be rolled back, so a missing or changed deployment must
+fail verification rather than be repaired silently. The Base Sepolia
+measurements of revision 2 are in the git history. The
 harness checks the resolver's local-only configuration through its loopback
 guard and trust labels; it does not yet run the resolver in a network-isolated
-sandbox. Whether the chosen RPC providers honour
-`requireCanonical` must be checked before the ceremony.
+sandbox.

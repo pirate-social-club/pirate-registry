@@ -1,6 +1,21 @@
 # Deployments
 
-## Base Sepolia (84532), release `base-sepolia-1`, 2026-11-03
+## MegaETH testnet (6343), release `megaeth-testnet-1`
+
+Pending. SPEC revision 3 moves the registry to MegaETH testnet and adds sale
+policy (protocol version 2). The order is `deploy-test-token`, pinning its
+address in `script/Deploy.s.sol`, `deploy-factory` from the committed build,
+`scripts/verify-release.ts --name megaeth-testnet --write-manifest`, then
+`harness/testnet-rehearsal.ts`.
+
+## Base Sepolia (84532), release `base-sepolia-1`, 2026-11-03 (retired)
+
+Retired by SPEC revision 3 on 2026-11-04: Base is no longer supported and the
+bundled manifest no longer lists this release, so resolvers built from later
+commits refuse these contracts. The record below is kept as history. c22 on
+Handshake mainnet still delegates to the Base Sepolia registry
+`0x39E01249d867791F92acC70AbFdcD97Ee82884C9` until a separate Handshake
+update repoints it.
 
 Deployed from the solc build of commit
 `ba92e01460c83e840fbebe833678603c729116d0` by the throwaway testnet operator

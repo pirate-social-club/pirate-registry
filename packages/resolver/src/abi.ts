@@ -20,6 +20,19 @@ export const registryAbi = [
   },
   {
     "type": "function",
+    "name": "MAX_LENGTH_TIERS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "MAX_PURCHASE_YEARS",
     "inputs": [],
     "outputs": [
@@ -47,6 +60,19 @@ export const registryAbi = [
   {
     "type": "function",
     "name": "MAX_REMAINING",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "NOT_FOR_SALE",
     "inputs": [],
     "outputs": [
       {
@@ -99,19 +125,6 @@ export const registryAbi = [
         "name": "",
         "type": "address",
         "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "annualPrice",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -171,6 +184,19 @@ export const registryAbi = [
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "clearPremiumPrices",
+    "inputs": [
+      {
+        "name": "labels",
+        "type": "string[]",
+        "internalType": "string[]"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -368,6 +394,19 @@ export const registryAbi = [
   },
   {
     "type": "function",
+    "name": "lengthPrices",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "lockedPrice",
     "inputs": [
       {
@@ -439,6 +478,49 @@ export const registryAbi = [
         "name": "",
         "type": "address",
         "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "premiumPriceOf",
+    "inputs": [
+      {
+        "name": "label",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "set",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "price",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "priceOf",
+    "inputs": [
+      {
+        "name": "label",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -574,6 +656,25 @@ export const registryAbi = [
   },
   {
     "type": "function",
+    "name": "reservedFor",
+    "inputs": [
+      {
+        "name": "label",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "safeTransferFrom",
     "inputs": [
       {
@@ -643,6 +744,37 @@ export const registryAbi = [
   },
   {
     "type": "function",
+    "name": "setLengthPrices",
+    "inputs": [
+      {
+        "name": "prices",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setPremiumPrices",
+    "inputs": [
+      {
+        "name": "labels",
+        "type": "string[]",
+        "internalType": "string[]"
+      },
+      {
+        "name": "prices",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "setPrice",
     "inputs": [
       {
@@ -690,6 +822,24 @@ export const registryAbi = [
         "name": "manager",
         "type": "address",
         "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setReservations",
+    "inputs": [
+      {
+        "name": "labels",
+        "type": "string[]",
+        "internalType": "string[]"
+      },
+      {
+        "name": "claimants",
+        "type": "address[]",
+        "internalType": "address[]"
       }
     ],
     "outputs": [],
@@ -968,10 +1118,54 @@ export const registryAbi = [
   },
   {
     "type": "event",
-    "name": "PriceChanged",
+    "name": "LengthPricesChanged",
     "inputs": [
       {
-        "name": "annualPrice",
+        "name": "prices",
+        "type": "uint256[]",
+        "indexed": false,
+        "internalType": "uint256[]"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "PremiumPriceCleared",
+    "inputs": [
+      {
+        "name": "labelhash",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "label",
+        "type": "string",
+        "indexed": false,
+        "internalType": "string"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "PremiumPriceSet",
+    "inputs": [
+      {
+        "name": "labelhash",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "label",
+        "type": "string",
+        "indexed": false,
+        "internalType": "string"
+      },
+      {
+        "name": "price",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -1099,6 +1293,31 @@ export const registryAbi = [
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ReservationSet",
+    "inputs": [
+      {
+        "name": "labelhash",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "label",
+        "type": "string",
+        "indexed": false,
+        "internalType": "string"
+      },
+      {
+        "name": "claimant",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
       }
     ],
     "anonymous": false
@@ -1296,12 +1515,22 @@ export const registryAbi = [
   },
   {
     "type": "error",
+    "name": "InvalidPrices",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "InvalidTreasury",
     "inputs": []
   },
   {
     "type": "error",
     "name": "InvalidYears",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "LengthMismatch",
     "inputs": []
   },
   {
@@ -1318,6 +1547,11 @@ export const registryAbi = [
   {
     "type": "error",
     "name": "NotAuthorized",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotForSale",
     "inputs": []
   },
   {
@@ -1345,6 +1579,17 @@ export const registryAbi = [
     "type": "error",
     "name": "ReentrancyGuardReentrantCall",
     "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "Reserved",
+    "inputs": [
+      {
+        "name": "claimant",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
   },
   {
     "type": "error",
