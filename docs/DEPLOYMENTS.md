@@ -34,6 +34,45 @@ wrote the manifest entry.
 Registries deployed from this factory for rehearsal TLDs confer no authority
 over any real Handshake TLD; only a TLD's `_evm` record does.
 
+### Rehearsal on MegaETH testnet, 2026-11-04
+
+`node harness/testnet-rehearsal.ts` ran against these contracts with a local
+hsd regtest TLD `testtld` delegated to `0xb23c3510e6a30e470d67cbc6848c731f32ff42cd.6343._evm.`
+and passed. The evidence is `docs/rehearsals/megaeth-testnet-2026-11-04.json`.
+
+- The CLI deployed registry `0xB23c3510E6A30E470D67CBc6848C731f32ff42Cd`
+  closed (block 34068664) and then opened it with `--min-length 8` at
+  1 ptUSD a year.
+- The operator set a premium price of 2 ptUSD for `ceo` and reserved it for
+  the buyer `0x39943fc46312b031A57B9c2C54013f44052DD497`.
+- `verify-registry` verified the delegation, manifest `megaeth-testnet-1` and
+  protocol version 2 at the `safe` tag.
+- `check` reported the six-letter `studio` as not for sale.
+- The buyer bought `studiohq` and the reserved premium `ceo` through the
+  verified CLI. The delegation was verified before and after each purchase,
+  in transactions `0x0cdb72b4e0c61d02e6244c7113caeae78bf2353a0c422328358c9d16455446f7`
+  and `0xc61c30aeea5d2142f436cc724489431afc31156720aea2c8dc4c2a1f51a7634a`.
+- After an A record was set, `studiohq.testtld` resolved through hnsd and the
+  MegaETH RPC with the system clock at safe block 34069128, returning the
+  buyer as holder and `192.0.2.10`.
+
+Gas used, at 0.001 gwei:
+
+| Transaction | Gas |
+|---|---|
+| Deploy registry (closed) | 893,413 |
+| Open the 8+ band | 308,628 |
+| Premium price for `ceo` | 146,008 |
+| Reserve `ceo` | 127,724 |
+| Register `studiohq` (approval separate) | 351,277 |
+| Register reserved premium `ceo` | 312,786 |
+| Set an A record | 133,857 |
+| Mint test token | 127,175 |
+| Plain transfer | 60,000 |
+
+The `safe` tag trailed `latest` by 111 to 171 seconds and `finalized` by
+1,817 to 1,885 seconds during the run.
+
 ## Base Sepolia (84532), release `base-sepolia-1`, 2026-11-03 (retired)
 
 Retired by SPEC revision 3 on 2026-11-04: Base is no longer supported and the

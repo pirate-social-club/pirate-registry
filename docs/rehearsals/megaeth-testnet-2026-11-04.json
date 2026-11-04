@@ -1,0 +1,270 @@
+{
+  "at": "2026-11-04T07:58:30.922Z",
+  "rpc": "https://carrot.megaeth.com/rpc",
+  "chainId": 6343,
+  "manifestRelease": "megaeth-testnet-1",
+  "blockTagsAtStart": {
+    "latest": {
+      "number": "34068655",
+      "timestamp": "1793779111"
+    },
+    "safeLag": {
+      "blocks": "171",
+      "seconds": "171"
+    },
+    "finalizedLag": {
+      "blocks": "1817",
+      "seconds": "1817"
+    }
+  },
+  "operator": "0x274f223809F00CBdD51d05De3aBC8fd3368fDE16",
+  "buyer": "0x39943fc46312b031A57B9c2C54013f44052DD497",
+  "registryDeployment": {
+    "registry": "0xB23c3510E6A30E470D67CBc6848C731f32ff42Cd",
+    "transaction": "0x743d0a434c8f9e4cca6da2fc89cd9876f4bd44a4c3d3423dd61e4499f0188f5e",
+    "block": "34068664"
+  },
+  "registry": "0xB23c3510E6A30E470D67CBc6848C731f32ff42Cd",
+  "policy": {
+    "paymentToken": {
+      "address": "0xC5321666F425812D1C12F44dA7BFe08CEB00044B",
+      "decimals": 6,
+      "symbol": "ptUSD"
+    },
+    "lengthPrices": [
+      {
+        "length": "1",
+        "annualPrice": "not for sale"
+      },
+      {
+        "length": "2",
+        "annualPrice": "not for sale"
+      },
+      {
+        "length": "3",
+        "annualPrice": "not for sale"
+      },
+      {
+        "length": "4",
+        "annualPrice": "not for sale"
+      },
+      {
+        "length": "5",
+        "annualPrice": "not for sale"
+      },
+      {
+        "length": "6",
+        "annualPrice": "not for sale"
+      },
+      {
+        "length": "7",
+        "annualPrice": "not for sale"
+      },
+      {
+        "length": "8+",
+        "annualPrice": "1"
+      }
+    ],
+    "labels": [
+      {
+        "label": "ceo",
+        "annualPrice": "2",
+        "premium": "2",
+        "reservedFor": "0x39943fc46312b031A57B9c2C54013f44052DD497"
+      }
+    ]
+  },
+  "delegation": "0xb23c3510e6a30e470d67cbc6848c731f32ff42cd.6343._evm.",
+  "verifyRegistry": {
+    "tld": "testtld",
+    "registry": "0xB23c3510E6A30E470D67CBc6848C731f32ff42Cd",
+    "chainId": "6343",
+    "record": "0xb23c3510e6a30e470d67cbc6848c731f32ff42cd.6343._evm.",
+    "manifestRelease": "megaeth-testnet-1",
+    "protocolVersion": 2,
+    "handshake": {
+      "source": "hnsd dns://127.0.0.1:26349",
+      "trust": "local-spv"
+    },
+    "block": {
+      "tag": "safe",
+      "number": "34068756",
+      "hash": "0xa9fb1c4c4f71b6c29976006c1acc26931b85c5fb19470f43ff418af65a3e39a9",
+      "timestamp": "1793779212"
+    },
+    "evmTrust": "remote-rpc",
+    "clock": "system"
+  },
+  "closedLabel": {
+    "label": "studio.testtld",
+    "available": true,
+    "forSale": false,
+    "paymentToken": {
+      "address": "0xC5321666F425812D1C12F44dA7BFe08CEB00044B",
+      "decimals": 6,
+      "symbol": "ptUSD"
+    },
+    "annualPrice": "not for sale",
+    "current": {
+      "tokenId": "0",
+      "generation": "0",
+      "status": "Unknown"
+    },
+    "disclosures": [
+      "The owner of .testtld on Handshake can repoint its delegation or let it lapse, which ends resolution while the NFT survives. Its Handshake renewal deadline is unknown from this source.",
+      "This registry runs on chain 6343 (MegaETH testnet) and depends on its sequencer ordering, upgrade controls and finality.",
+      "The payment token's issuer may be able to pause it or block the payer or the registry; either would block paid registrations, paid renewals and sweeps.",
+      "The operator can change prices and reservations for future registrations at any time. This registration's annual price stays locked through transfers, grace and renewals, but a reservation can stop anyone except its claimant from registering the name again after it is released.",
+      "There is no commit-reveal: another buyer can win a race for the same label. The maximum cost and deadline protect only the payment terms.",
+      "The operator's revenue sits in the registry contract until someone sweeps it to the treasury.",
+      "Records are public."
+    ]
+  },
+  "register": {
+    "tokenId": "48745484984263185816342369919263687260976893715955432144237427322362521358916",
+    "generation": "1",
+    "expiry": "1825315333",
+    "transaction": "0x0cdb72b4e0c61d02e6244c7113caeae78bf2353a0c422328358c9d16455446f7",
+    "delegationBefore": "0xb23c3510e6a30e470d67cbc6848c731f32ff42cd.6343._evm.",
+    "delegationAfter": "verified"
+  },
+  "registerReserved": {
+    "tokenId": "54623819565609732353667723395300243660971095770567928771636532661796227044971",
+    "generation": "1",
+    "expiry": "1825315343",
+    "transaction": "0xc61c30aeea5d2142f436cc724489431afc31156720aea2c8dc4c2a1f51a7634a",
+    "delegationBefore": "0xb23c3510e6a30e470d67cbc6848c731f32ff42cd.6343._evm.",
+    "delegationAfter": "verified"
+  },
+  "setRecord": {
+    "transaction": "0x7d43a0a15cc2762ebb499c4af9cb7ebd80b29c5bd71765a74d9028f1003c9a58",
+    "block": "34068892"
+  },
+  "resolve": {
+    "name": "studiohq.testtld",
+    "usable": true,
+    "observedAt": {
+      "chainId": "6343",
+      "blockTag": "safe",
+      "blockNumber": "34069128",
+      "blockHash": "0x48173850e262af712c0b0581ff7f78f9b96e49b9a67562ca487fe92242d1ea5f",
+      "blockTimestamp": 1793779584,
+      "hostTime": 1793779695,
+      "clock": "system"
+    },
+    "handshake": {
+      "source": "hnsd dns://127.0.0.1:26349",
+      "trust": "local-spv",
+      "record": "0xb23c3510e6a30e470d67cbc6848c731f32ff42cd.6343._evm."
+    },
+    "evm": {
+      "rpc": "https://carrot.megaeth.com/rpc",
+      "trust": "remote-rpc"
+    },
+    "registry": {
+      "address": "0xB23c3510E6A30E470D67CBc6848C731f32ff42Cd",
+      "factory": "0x702185797cD23E153fd0b83B672f969eA4aCfCc6",
+      "manifestRelease": "megaeth-testnet-1",
+      "protocolVersion": 2
+    },
+    "token": {
+      "label": "studiohq",
+      "tokenId": "48745484984263185816342369919263687260976893715955432144237427322362521358916",
+      "generation": "1",
+      "holder": "0x39943fc46312b031A57B9c2C54013f44052DD497",
+      "expiry": 1825315333
+    },
+    "records": {
+      "dns": {
+        "A": {
+          "ttl": 300,
+          "values": [
+            "192.0.2.10"
+          ]
+        }
+      },
+      "text": {},
+      "addr": {}
+    }
+  },
+  "blockTagsAtEnd": {
+    "latest": {
+      "number": "34069239",
+      "timestamp": "1793779695"
+    },
+    "safeLag": {
+      "blocks": "111",
+      "seconds": "111"
+    },
+    "finalizedLag": {
+      "blocks": "1885",
+      "seconds": "1885"
+    }
+  },
+  "operatorBalanceAfter": "0.994806217163995491",
+  "gas": [
+    {
+      "step": "buyer gas top-up",
+      "transaction": "0x38a2244ae612e424db9edd881f8e9d7896fd0f33091e18ed1cb243b8d94037e3",
+      "gasUsed": "60000",
+      "effectiveGasPrice": "1000000",
+      "feeWei": "60000000000"
+    },
+    {
+      "step": "mint test token to buyer",
+      "transaction": "0x4bace96174e4c3230a92d361f3cd4b04948cab8b56534094f0274067bf84f388",
+      "gasUsed": "127175",
+      "effectiveGasPrice": "1000000",
+      "feeWei": "127175000000"
+    },
+    {
+      "step": "deploy registry (closed)",
+      "transaction": "0x743d0a434c8f9e4cca6da2fc89cd9876f4bd44a4c3d3423dd61e4499f0188f5e",
+      "gasUsed": "893413",
+      "effectiveGasPrice": "1000000",
+      "feeWei": "893413000000"
+    },
+    {
+      "step": "open the 8+ band",
+      "transaction": "0xd78aeeb67531058fe7db1a7a5c5b0ccee317a9f7714a746e0ffab18729a1b901",
+      "gasUsed": "308628",
+      "effectiveGasPrice": "1000000",
+      "feeWei": "308628000000"
+    },
+    {
+      "step": "premium price for ceo",
+      "transaction": "0x70e1567b1a86317b9c2454996cefbb0d3197979f570313a18001dffc48777586",
+      "gasUsed": "146008",
+      "effectiveGasPrice": "1000000",
+      "feeWei": "146008000000"
+    },
+    {
+      "step": "reserve ceo for the buyer",
+      "transaction": "0xdc7ceb4899ea2a96ae2ab34771a75937c49a278bed0d93f265b3db94d16e76a1",
+      "gasUsed": "127724",
+      "effectiveGasPrice": "1000000",
+      "feeWei": "127724000000"
+    },
+    {
+      "step": "register studiohq (approve included separately)",
+      "transaction": "0x0cdb72b4e0c61d02e6244c7113caeae78bf2353a0c422328358c9d16455446f7",
+      "gasUsed": "351277",
+      "effectiveGasPrice": "1000000",
+      "feeWei": "351277000000"
+    },
+    {
+      "step": "register reserved premium ceo",
+      "transaction": "0xc61c30aeea5d2142f436cc724489431afc31156720aea2c8dc4c2a1f51a7634a",
+      "gasUsed": "312786",
+      "effectiveGasPrice": "1000000",
+      "feeWei": "312786000000"
+    },
+    {
+      "step": "set A record",
+      "transaction": "0x7d43a0a15cc2762ebb499c4af9cb7ebd80b29c5bd71765a74d9028f1003c9a58",
+      "gasUsed": "133857",
+      "effectiveGasPrice": "1000000",
+      "feeWei": "133857000000"
+    }
+  ]
+}
