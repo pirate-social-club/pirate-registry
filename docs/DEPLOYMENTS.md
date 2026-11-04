@@ -76,14 +76,49 @@ Gas used, at 0.001 gwei:
 The `safe` tag trailed `latest` by 111 to 171 seconds and `finalized` by
 1,817 to 1,885 seconds during the run.
 
+### c22 ceremony on MegaETH testnet, 2026-11-04
+
+Real Handshake authority, test registrations. The workspace_owner's
+instruction was: "repoint c22's Handshake delegation to a MegaETH testnet
+registry and run the c22 ceremony against it." The staging package is
+`handoffs/pirate-registry-c22-megaeth-repoint-2026-11-04/`.
+
+- c22 registry `0xe56E25eAf86FB8BF641754Fd7918735B98851744` was deployed
+  from this factory in
+  `0x2b5a8518cd7e8f0a3b856f83e6d62730b8c5fd627c338367457ef37c579b48f3`
+  (block 34069840) with the 8+ band at 1 ptUSD.
+- Bob wallet psc1 replaced c22's NS record
+  `0x39e01249d867791f92acc70abfdcd97ee82884c9.84532._evm.` with
+  `0xe56e25eaf86fb8bf641754fd7918735b98851744.6343._evm.` in Handshake
+  transaction `f860ac4676d3a0c2107fc52755267064a069fd0a0dfce348e09713453aa2a024`
+  (fee 0.0301 HNS). It was mined at height 354290 in block
+  `000000000000000b588415110994796faae539b624dc40da249aa8a51aafb8a9` and
+  committed to the name tree at 354312.
+- The local mainnet hnsd first verified the delegation at height 354328
+  (15:15 UTC), four blocks after the expected 354324. Two earlier attempts
+  ran while hnsd was re-syncing after the watcher's cache-clearing restart.
+  Two more, at hnsd heights 354324 and 354327, returned
+  `handshake_unavailable`; their cause was not diagnosed.
+- `harness/ceremony.ts` then passed from 15:15 to 15:24 UTC:
+  - `studiohq.c22` was bought through the verified CLI in
+    `0x5282b00a96cb2475e623aa596b25a205fe79dff8384a3c1839e863309c451a7a`,
+    with the delegation verified again after confirmation.
+  - The A record `192.0.2.22` and a TXT record were set and resolved through
+    hnsd and the MegaETH RPC on the system clock.
+  - The name was transferred to the operator in
+    `0xb3ca7fb1279982dbcfe78953542db22cd442a9206d348f2676e1361890fec0d3`
+    and resolved again with its records kept.
+
+  The evidence is `docs/ceremonies/c22-2026-11-04-megaeth.json`. The c22
+  delegation remains published as a test deployment.
+
 ## Base Sepolia (84532), release `base-sepolia-1`, 2026-11-03 (retired)
 
 Retired by SPEC revision 3 on 2026-11-04: Base is no longer supported and the
 bundled manifest no longer lists this release, so resolvers built from later
-commits refuse these contracts. The record below is kept as history. c22 on
-Handshake mainnet still delegates to the Base Sepolia registry
-`0x39E01249d867791F92acC70AbFdcD97Ee82884C9` until a separate Handshake
-update repoints it.
+commits refuse these contracts. The record below is kept as history. On
+2026-11-04 c22 was repointed from the Base Sepolia registry
+`0x39E01249d867791F92acC70AbFdcD97Ee82884C9` to MegaETH testnet (above).
 
 Deployed from the solc build of commit
 `ba92e01460c83e840fbebe833678603c729116d0` by the throwaway testnet operator
