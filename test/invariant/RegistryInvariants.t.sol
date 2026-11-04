@@ -24,7 +24,7 @@ contract RegistryInvariants is Test {
         treasuries[1] = makeAddr("treasury-1");
         treasuries[2] = makeAddr("treasury-2");
         registry = SLDRegistry(factory.deployRegistry("testtld", operator, treasuries[0], 5e6));
-        handler = new RegistryHandler(registry, usdc, operator, treasuries);
+        handler = new RegistryHandler(registry, usdc, operator, treasuries, 5e6);
         targetContract(address(handler));
     }
 
@@ -37,6 +37,8 @@ contract RegistryInvariants is Test {
         console.log("rejected transfers", handler.rejectedTransfers());
         console.log("manager record writes", handler.managerRecordWrites());
         console.log("sweeps ok", handler.sweepsSucceeded(), "failed", handler.sweepsFailed());
+        console.log("premium", handler.premiumRegistrations(), "reserved", handler.reservedRegistrations());
+        console.log("refused: reserved", handler.reservationRefusals(), "closed", handler.closedRefusals());
     }
 
     /// Every contract outcome (success or revert) matched the model's
@@ -52,6 +54,16 @@ contract RegistryInvariants is Test {
             assertEq(uint8(registry.status(id)), uint8(handler.modelStatus(id)), "status");
             assertEq(registry.expiresAt(id), handler.ghostExpiry(id), "expiry");
             assertEq(registry.lockedPrice(id), handler.ghostLockedPrice(id), "locked price");
+        }
+    }
+
+    /// Quoted prices and reservations match the model's policy for every label.
+    function invariant_PolicyMatchesModel() public view {
+        for (uint256 l; l < handler.labelCount(); ++l) {
+            string memory label = handler.labelAt(l);
+            bytes32 labelhash = keccak256(bytes(label));
+            assertEq(registry.priceOf(label), handler.modelPrice(labelhash, bytes(label).length), "price");
+            assertEq(registry.reservedFor(label), handler.ghostReservation(labelhash), "reservation");
         }
     }
 
