@@ -141,7 +141,8 @@ async function main() {
 
   const a = cli(['set-record', ...keyed, '--type', 'A', '--value', '192.0.2.22']);
   assert.equal(a.code, 0, a.stdout + a.stderr);
-  const txt = cli(['set-record', ...keyed, '--type', 'TXT', '--value', 'pirate-registry ceremony 2026-11-03']);
+  const txtValue = `pirate-registry ceremony ${new Date().toISOString().slice(0, 10)}`;
+  const txt = cli(['set-record', ...keyed, '--type', 'TXT', '--value', txtValue]);
   assert.equal(txt.code, 0, txt.stdout + txt.stderr);
   evidence.records = { aTransaction: a.json?.transaction, txtTransaction: txt.json?.transaction };
   await waitForSafe(txt.json?.transaction as Hex, 'record update');
@@ -151,7 +152,7 @@ async function main() {
   const firstAnswer = first.json as { token: { holder: string }; records: { dns: Record<string, { values: unknown[] }> }; observedAt: { clock: string } };
   assert.equal(firstAnswer.token.holder.toLowerCase(), (process.env.BUYER_ADDRESS as string).toLowerCase());
   assert.deepEqual(firstAnswer.records.dns.A?.values, ['192.0.2.22']);
-  assert.deepEqual(firstAnswer.records.dns.TXT?.values, [['pirate-registry ceremony 2026-11-03']]);
+  assert.deepEqual(firstAnswer.records.dns.TXT?.values, [[txtValue]]);
   assert.equal(firstAnswer.observedAt.clock, 'system');
   evidence.resolveAfterPurchase = resolveSummary(first.json as Record<string, unknown>);
 
