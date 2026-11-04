@@ -1,12 +1,38 @@
 # Deployments
 
-## MegaETH testnet (6343), release `megaeth-testnet-1`
+## MegaETH testnet (6343), release `megaeth-testnet-1`, 2026-11-04
 
-Pending. SPEC revision 3 moves the registry to MegaETH testnet and adds sale
-policy (protocol version 2). The order is `deploy-test-token`, pinning its
-address in `script/Deploy.s.sol`, `deploy-factory` from the committed build,
-`scripts/verify-release.ts --name megaeth-testnet --write-manifest`, then
-`harness/testnet-rehearsal.ts`.
+Deployed with the CLI from the solc build of commit
+`245c83c854cdbf393b3df8dc7a6a2262c513d5a8` (protocol version 2) by the
+throwaway testnet operator `0x274f223809F00CBdD51d05De3aBC8fd3368fDE16`,
+through `https://carrot.megaeth.com/rpc` with the RPC's own gas estimates.
+
+| Item | Value |
+|---|---|
+| Payment token (PirateTestUSD, ptUSD, 6 decimals, no value) | `0xC5321666F425812D1C12F44dA7BFe08CEB00044B` |
+| Token deploy transaction | `0x6921283c840aa8f68416477efdb819256aa0be3189f1e0cae4e2297db268ec0a` (block 34068238, 19,698,824 gas) |
+| Factory | `0x702185797cD23E153fd0b83B672f969eA4aCfCc6` |
+| Implementation | `0x1BFd3B5B227cfa1BD1E1bA8Acf2855B7fCDfDfdA` |
+| Factory deploy transaction | `0x5fd59148d245f84f4d773dd711a5d2db4f372eba096df4cd799d153497de1971` (block 34068270, 172,421,064 gas) |
+| Implementation code hash | `0x165fdfb3246f0ea9e4df8f1e9ce74f359ce907f20303dd65a5331539be186af0` |
+| Factory code hash | `0x4bd9541c1194d770625f54d998407c0a9ae539a0d8d32ab998e2d4da0fbe17e8` |
+
+Both deployments paid an effective gas price of 0.001 gwei, about 0.00002
+and 0.00017 test ETH. MegaETH's storage gas charges 10,000 gas per byte of
+deployed code, so deployment gas is far above Base's for the same bytecode
+while the fee stays small.
+
+`node scripts/verify-release.ts --rpc https://carrot.megaeth.com/rpc --factory
+0x702185797cD23E153fd0b83B672f969eA4aCfCc6 --name megaeth-testnet
+--write-manifest packages/resolver/manifest/manifest.json --block safe`
+rebuilt commit 245c83c independently. At safe block 34068484
+(`0x1bdb297b6c3d50e27c6d48f6db14e30d25a0af4b7f494e0483966a6d1591e415`) it
+reported an exact implementation match and a factory match outside its two
+immutable slots, which held the implementation and test-token addresses. It
+wrote the manifest entry.
+
+Registries deployed from this factory for rehearsal TLDs confer no authority
+over any real Handshake TLD; only a TLD's `_evm` record does.
 
 ## Base Sepolia (84532), release `base-sepolia-1`, 2026-11-03 (retired)
 

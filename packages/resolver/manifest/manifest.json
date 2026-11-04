@@ -1,7 +1,7 @@
 {
   "release": "megaeth-testnet-1",
   "protocolVersion": 2,
-  "sourceCommit": "",
+  "sourceCommit": "245c83c854cdbf393b3df8dc7a6a2262c513d5a8",
   "compiler": {
     "solc": "0.8.30",
     "evmVersion": "cancun",
@@ -9,5 +9,15 @@
     "bytecodeHash": "none",
     "cborMetadata": false
   },
-  "chains": {}
+  "chains": {
+    "6343": {
+      "name": "megaeth-testnet",
+      "factory": "0x702185797cD23E153fd0b83B672f969eA4aCfCc6",
+      "factoryCodeHash": "0x4bd9541c1194d770625f54d998407c0a9ae539a0d8d32ab998e2d4da0fbe17e8",
+      "implementation": "0x1BFd3B5B227cfa1BD1E1bA8Acf2855B7fCDfDfdA",
+      "implementationCodeHash": "0x165fdfb3246f0ea9e4df8f1e9ce74f359ce907f20303dd65a5331539be186af0",
+      "paymentToken": "0xC5321666F425812D1C12F44dA7BFe08CEB00044B",
+      "paymentTokenDecimals": 6
+    }
+  }
 }
