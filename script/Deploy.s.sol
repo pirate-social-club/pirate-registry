@@ -12,8 +12,8 @@ import {PirateTestUSD} from "./testnet/PirateTestUSD.sol";
 /// (31337) gets a mock. Base and Base Sepolia are no longer supported.
 library PaymentTokens {
     uint256 internal constant MEGAETH_TESTNET_CHAIN_ID = 6343;
-    /// Pinned after `DeployTestToken`; zero until then.
-    address internal constant MEGAETH_TESTNET = address(0);
+    /// PirateTestUSD from `DeployTestToken`, 2026-11-04 (docs/DEPLOYMENTS.md).
+    address internal constant MEGAETH_TESTNET = 0xC5321666F425812D1C12F44dA7BFe08CEB00044B;
 
     function forChain(uint256 chainId) internal pure returns (address) {
         if (chainId == MEGAETH_TESTNET_CHAIN_ID) return MEGAETH_TESTNET;
