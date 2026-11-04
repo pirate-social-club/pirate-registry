@@ -60,7 +60,8 @@ contract DeployFactory is Script {
 }
 
 /// forge script script/Deploy.s.sol:DeployRegistry --sig "run(address,string,address,address,uint256)" \
-///   <factory> <tld> <admin> <treasury> <annualPrice> --rpc-url <url> --broadcast <signer flags>
+///   <factory> <tld> <admin> <treasury> <annualPrice> --rpc-url <url> --broadcast --skip-simulation <signer flags>
+/// One flat price only; the CLI's `deploy-registry` also handles minimum lengths.
 contract DeployRegistry is Script {
     function run(address factory, string calldata tld, address admin, address treasury, uint256 annualPrice)
         external

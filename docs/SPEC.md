@@ -44,7 +44,7 @@ token ID. Year means 365 days of block timestamps.
 | D2 | A registration's annual price is fixed for the life of its generation, through transfers and grace. | Adopted 2026-11-03 |
 | D3 | The registry receives payments. A separate, permissionless `sweep()` forwards the balance to the treasury. | Adopted 2026-11-03 |
 | D4 | `.pirate` is excluded until a separately ratified migration preserves existing persona ownership (spec 014, 2026-08-24 amendment). 8s28 and a18n are excluded because PIRATE renewal freezes their zones. | Required by spec 014 |
-| D5 | Operators set a sale policy for new registrations only: an annual price per label length, a premium price per label and a reservation per label, after HNS.ID's `DefaultRegistrationStrategy`. No discounts, signed vouchers, allowlists or pause. | Adopted 2026-11-04 |
+| D5 | Operators set a sale policy for new registrations only: an annual price per label length, a premium price per label and a reservation per label, after HNS.ID's `DefaultRegistrationStrategy`. No discounts, signed vouchers or allowlists, and no pause of renewals, transfers or record edits. | Adopted 2026-11-04 |
 
 MegaEVM builds on Optimism Isthmus (Ethereum Prague) and adds its own gas
 model: compute plus storage gas, a 60,000 intrinsic minimum, 98/100 call-gas
@@ -160,6 +160,17 @@ powers:
   - The current app's open sale band of 8 or more characters is the table of
     seven `NOT_FOR_SALE` entries followed by the price. Shorter labels then
     sell only with a premium price, and a reserved short label needs one.
+  - Two behaviours differ from HNS.ID on purpose. Renewals always cost the
+    generation's locked price (D2), where HNS.ID charges the lower of the
+    registration price and the current price, so lowering a tier or clearing
+    a premium never helps existing holders. A premium of zero means free,
+    where HNS.ID treats zero as no premium.
+  - Each policy change is a separate transaction that buyers can race.
+    Operators SHOULD reserve a label before giving it a premium price, because
+    a premium on an unreserved closed label opens it to anyone until the
+    reservation lands. A new registry SHOULD be configured before it opens:
+    deploy with a closed price, set reservations, then premiums, then the
+    length table, and only then publish the `_evm` record.
 - `setTreasury(treasury)` changes the sweep destination. It MUST reject the
   zero address and the registry's own address, and MUST NOT move funds.
 - `transferAdmin(newAdmin)` followed by `acceptAdmin()` from `newAdmin` hands
@@ -622,7 +633,12 @@ can repoint or lapse. Payment-token control: the issuer, where the token has
 one. Chain control: MegaETH's sequencer, proposers and upgrade keys; testnet
 state may also be rolled back. Operator policy: the operator can reprice or
 reserve labels for future registrations, including labels whose current
-generation may later be Released. Remote RPC trust whenever a
+generation may later be Released. Policy changes are themselves raceable: a
+buyer can register an open label at its old price before a premium or a
+higher tier lands and keep that price for the generation, and anyone can pay
+to register a reserved open label to its claimant before the operator's
+intended premium lands. Section 6.2 gives the configuration order that avoids
+the first case for reserved labels. Remote RPC trust whenever a
 user does not run their own node. DNS reach: resolvers without `_evm` support
 cannot resolve these names until the adapter ships.
 
@@ -632,8 +648,8 @@ The registry network is MegaETH testnet. On 2026-11-04 the public endpoint
 `https://carrot.megaeth.com/rpc` reported chain 6343 (client
 `mega-reth/v2.2.2`) with about one block per second. `safe` trailed `latest`
 by about 280 seconds and `finalized` by about 1,930 seconds, so the 15-minute
-`safe` freshness default holds while `finalized` reads need a `--max-age`
-longer than about 32 minutes. It answered `eth_getCode` and `eth_call` at the safe
+`safe` freshness default holds, and so does the 90-minute `finalized`
+default. It answered `eth_getCode` and `eth_call` at the safe
 block's hash with `requireCanonical: true` and refused an unknown hash
 (`-32001 block not found`). Other providers are unchecked. MegaETH documents
 that testnet state may be rolled back, so a missing or changed deployment must

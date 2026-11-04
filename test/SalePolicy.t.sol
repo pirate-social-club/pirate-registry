@@ -221,6 +221,13 @@ contract SalePolicyTest is RegistryTestBase {
         assertEq(before - usdc.balanceOf(payer), PRICE);
     }
 
+    function test_ClaimantPayingForAnotherRecipientIsRefused() public {
+        _reserve("ceo", holderB);
+        vm.prank(holderB);
+        vm.expectRevert(abi.encodeWithSelector(SLDRegistry.Reserved.selector, holderB));
+        registry.register("ceo", 1, holderA, type(uint256).max, block.timestamp);
+    }
+
     function test_ReservedShortLabelNeedsAPrice() public {
         _setTable(_eightPlus(PRICE));
         _reserve("ceo", holderB);

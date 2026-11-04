@@ -43,8 +43,11 @@ and passed. The evidence is `docs/rehearsals/megaeth-testnet-2026-11-04.json`.
 - The CLI deployed registry `0xB23c3510E6A30E470D67CBc6848C731f32ff42Cd`
   closed (block 34068664) and then opened it with `--min-length 8` at
   1 ptUSD a year.
-- The operator set a premium price of 2 ptUSD for `ceo` and reserved it for
-  the buyer `0x39943fc46312b031A57B9c2C54013f44052DD497`.
+- The operator set a premium price of 2 ptUSD for `ceo`, then reserved it for
+  the buyer `0x39943fc46312b031A57B9c2C54013f44052DD497`. An independent
+  review then found that order unsafe: between the two transactions anyone
+  could have bought `ceo`. The harness now reserves first, and SPEC 6.2
+  states the order.
 - `verify-registry` verified the delegation, manifest `megaeth-testnet-1` and
   protocol version 2 at the `safe` tag.
 - `check` reported the six-letter `studio` as not for sale.

@@ -85,6 +85,19 @@ async function write(signer: Signer, address: Address, functionName: string, arg
 
 /** SPEC 6.2: a price entry that closes new registrations. */
 export const NOT_FOR_SALE = 2n ** 256n - 1n;
+/** Largest open price the CLI accepts, so multi-year costs never overflow. */
+export const MAX_OPEN_PRICE = 2n ** 128n - 1n;
+
+/** SPEC 6.3 label rules, checked before any chain call. */
+export function isValidLabel(label: string): boolean {
+  return /^[a-z0-9-]{1,63}$/.test(label) && !label.startsWith('-') && !label.endsWith('-') && label.slice(2, 4) !== '--';
+}
+
+function requireLabel(label: string): void {
+  if (!isValidLabel(label)) {
+    throw new Error(`"${label}" is not a valid label: 1 to 63 of a-z, 0-9 and hyphen, no leading or trailing hyphen, no hyphens at positions 3 and 4`);
+  }
+}
 
 /** Chains this release supports, with names used in disclosures. */
 export const CHAIN_NAMES: Record<number, string> = { 6343: 'MegaETH testnet', 31337: 'local anvil' };
@@ -219,6 +232,7 @@ export async function verifyPurchaseAuthority(
  * only recipient allowed when it is not the zero address.
  */
 export async function quote(client: PublicClient, registry: Address, label: string, years: number) {
+  requireLabel(label);
   const [available, annualPrice, reservedFor, paymentToken, current] = await Promise.all([
     client.readContract({ address: registry, abi: registryAbi, functionName: 'available', args: [label] }),
     client.readContract({ address: registry, abi: registryAbi, functionName: 'priceOf', args: [label] }),
@@ -241,6 +255,7 @@ export async function quote(client: PublicClient, registry: Address, label: stri
 
 /** The registry's sale policy for a set of labels, for operators and storefronts. */
 export async function policy(client: PublicClient, registry: Address, labels: string[] = []) {
+  labels.forEach(requireLabel);
   const lengthPrices = await client.readContract({ address: registry, abi: registryAbi, functionName: 'lengthPrices' });
   const entries = await Promise.all(
     labels.map(async (label) => {

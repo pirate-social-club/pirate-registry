@@ -55,7 +55,11 @@ this registry on this chain and that it passes manifest verification, and
 check again after confirmation. Nothing is approved or paid otherwise.
 
 Amounts are in the registry's payment token, whose decimals are read from the
-chain. "closed" is NOT_FOR_SALE. Tier i of --prices applies to labels of
+chain, and are refused rather than rounded when they carry more decimals.
+"closed" is NOT_FOR_SALE. To configure before opening, deploy with --price
+closed, then reserve, then set premiums, then set-length-prices, and only then
+publish the _evm record: a premium set before its reservation opens the label
+to anyone until the reservation lands. Tier i of --prices applies to labels of
 length i and the last tier to every longer label; --min-length 8 closes
 lengths 1 to 7 at deployment, like the current app's open sale band.
 
@@ -113,9 +117,21 @@ const required = (key: keyof typeof values): string => {
   return v;
 };
 const address = (key: keyof typeof values): Address => getAddress(required(key));
-/** A token amount, or "closed" for NOT_FOR_SALE. */
-const price = (amount: string, decimals: number) =>
-  amount.trim() === 'closed' ? sdk.NOT_FOR_SALE : parseUnits(amount.trim(), decimals);
+/** A token amount with at most the token's decimals; never rounded. */
+function amountOf(input: string, decimals: number): bigint {
+  const text = input.trim();
+  const match = /^(\d+)(?:\.(\d+))?$/.exec(text);
+  if (!match) throw new Error(`"${input}" is not a token amount`);
+  if ((match[2] ?? '').length > decimals) throw new Error(`"${input}" has more than the token's ${decimals} decimals`);
+  return parseUnits(text, decimals);
+}
+/** A price: an amount up to MAX_OPEN_PRICE units, or "closed" for NOT_FOR_SALE. */
+function price(input: string, decimals: number): bigint {
+  if (input.trim() === 'closed') return sdk.NOT_FOR_SALE;
+  const value = amountOf(input, decimals);
+  if (value > sdk.MAX_OPEN_PRICE) throw new Error(`"${input}" is above the largest open price; use "closed" to close sales`);
+  return value;
+}
 const formatPrice = (amount: bigint | string | undefined, decimals: number) =>
   typeof amount === 'bigint' ? (amount === sdk.NOT_FOR_SALE ? 'not for sale' : formatUnits(amount, decimals)) : amount;
 
@@ -182,7 +198,7 @@ async function main() {
     case 'mint-test-token': {
       const s = await signer();
       const token = await sdk.tokenInfo(s.publicClient, address('payment-token'));
-      const receipt = await sdk.mintTestToken(s, token.address, address('to'), price(required('amount'), token.decimals));
+      const receipt = await sdk.mintTestToken(s, token.address, address('to'), amountOf(required('amount'), token.decimals));
       print({ transaction: receipt.transactionHash });
       return;
     }
@@ -210,8 +226,19 @@ async function main() {
         treasury: address('treasury'),
         annualPrice: table.length > 1 ? sdk.NOT_FOR_SALE : annualPrice,
       });
-      const tableTransaction = table.length > 1 ? (await sdk.setLengthPrices(s, result.registry, table)).transactionHash : undefined;
-      print({ ...result, tableTransaction, delegationRecord: formatDelegation(result.registry, s.chain.id) });
+      const delegationRecord = formatDelegation(result.registry, s.chain.id);
+      let tableTransaction: Hex | undefined;
+      if (table.length > 1) {
+        console.error(`registry ${result.registry} deployed closed; opening the ${minLength}+ table`);
+        try {
+          tableTransaction = (await sdk.setLengthPrices(s, result.registry, table)).transactionHash;
+        } catch (error) {
+          print({ ...result, delegationRecord, tableError: (error as Error).message, state: 'deployed closed; run set-length-prices' });
+          process.exitCode = 1;
+          return;
+        }
+      }
+      print({ ...result, tableTransaction, delegationRecord });
       return;
     }
     case 'delegation-record':
@@ -316,7 +343,7 @@ async function main() {
         label,
         years,
         recipient: values.recipient ? getAddress(values.recipient) : undefined,
-        maxCost: values['max-cost'] ? parseUnits(values['max-cost'], token.decimals) : q.cost,
+        maxCost: values['max-cost'] ? amountOf(values['max-cost'], token.decimals) : q.cost,
       });
       const after = await sdk
         .verifyPurchaseAuthority(s.publicClient, registry, s.chain.id, authorityOptions(s.chain.id))
@@ -338,7 +365,7 @@ async function main() {
       const authority = await sdk.verifyPurchaseAuthority(s.publicClient, registry, s.chain.id, authorityOptions(s.chain.id));
       const tokenId = await sdk.currentTokenId(s.publicClient, registry, required('label'));
       const token = await registryToken(s.publicClient, registry);
-      const receipt = await sdk.renew(s, registry, tokenId, Number(values.years), values['max-cost'] ? parseUnits(values['max-cost'], token.decimals) : undefined);
+      const receipt = await sdk.renew(s, registry, tokenId, Number(values.years), values['max-cost'] ? amountOf(values['max-cost'], token.decimals) : undefined);
       print({ tokenId, transaction: receipt.transactionHash, delegation: authority.delegation.record });
       return;
     }

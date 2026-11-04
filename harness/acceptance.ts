@@ -302,8 +302,10 @@ async function main() {
     assert.equal(closed.json?.forSale, false);
     assert.equal(closed.json?.annualPrice, 'not for sale');
 
-    await sdk.setPremiumPrices(operator, registry, ['ceo'], [USDC(50)]);
+    // Reserve before pricing: a premium on an unreserved label would open it to anyone first.
     await sdk.setReservations(operator, registry, ['ceo'], [holderB.account.address]);
+    await expectRevert(sdk.register(buyer, registry, { label: 'ceo', years: 1, recipient: holderB.account.address }), 'reserved but still closed');
+    await sdk.setPremiumPrices(operator, registry, ['ceo'], [USDC(50)]);
     await expectRevert(sdk.register(buyer, registry, { label: 'ceo', years: 1 }), 'reserved label for another recipient');
     const ceo = await sdk.register(buyer, registry, { label: 'ceo', years: 1, recipient: holderB.account.address });
     const locked = await publicClient.readContract({ address: registry, abi: registryAbi, functionName: 'lockedPrice', args: [ceo.tokenId] });

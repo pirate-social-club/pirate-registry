@@ -135,10 +135,11 @@ async function main() {
   }
   log.registry = registry;
 
-  const premium = ok(cli(['set-premium', ...opKey, '--registry', registry, '--label', 'ceo', '--price', '2']), 'set-premium');
-  await recordGas('premium price for ceo', premium.transaction as Hex);
+  // Reserve before pricing: a premium on an unreserved label would open it to anyone first.
   const reserved = ok(cli(['reserve', ...opKey, '--registry', registry, '--label', 'ceo', '--to', buyer]), 'reserve');
-  const reservedReceipt = await recordGas('reserve ceo for the buyer', reserved.transaction as Hex);
+  await recordGas('reserve ceo for the buyer', reserved.transaction as Hex);
+  const premium = ok(cli(['set-premium', ...opKey, '--registry', registry, '--label', 'ceo', '--price', '2']), 'set-premium');
+  const reservedReceipt = await recordGas('premium price for ceo', premium.transaction as Hex);
   log.policy = ok(cli(['policy', '--rpc', RPC, '--registry', registry, '--label', 'ceo']), 'policy');
   await waitForSafe(reservedReceipt.blockNumber, 'sale policy');
 

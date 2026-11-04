@@ -102,6 +102,8 @@ contract RegistryHandler is Test {
         _labels.push("beta");
         _labels.push("x");
         _labels.push("community");
+        _labels.push("ab");
+        _labels.push("abc");
         for (uint256 i; i < _actors.length; ++i) {
             usdc.mint(_actors[i], 1e15);
             vm.prank(_actors[i]);
