@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { requireRegtestNode, REGTEST } from '../../../harness/lib/hsd.ts';
 import { parseSharedRegistrySource } from '../src/shared-manifest.ts';
 import { getAddress, keccak256 } from 'viem';
 import { readFileSync, mkdirSync, writeFileSync, realpathSync, existsSync, readdirSync, symlinkSync } from 'node:fs';
@@ -185,4 +186,56 @@ test('source profile refuses unknown fields, missing pins, v2, mainnet and alter
     { ...fixture(), deployment: { ...fixture().deployment, blockNumber: '01' } },
     { ...fixture(), deployment: { ...fixture().deployment, blockNumber: (2n ** 64n).toString() } },
     { ...fixture(), compiler: { ...fixture().compiler, optimizerRuns: 201 } }]) assert.throws(() => parseSharedRegistrySource(value));
+});
+
+test('Handshake guard queries getblockchaininfo on the configured local node', async t => {
+  const request = t.mock.method(globalThis, 'fetch',
+    async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+      assert.equal(input, REGTEST.nodeRpc);
+      assert.equal(init?.method, 'POST');
+      assert.deepEqual(init?.headers, { 'content-type': 'application/json' });
+      assert.equal(init?.body, JSON.stringify({ method: 'getblockchaininfo', params: [] }));
+      return Response.json({ result: { chain: 'regtest', blocks: 0, headers: 0 }, error: null, id: 1 });
+    });
+  await requireRegtestNode();
+  assert.equal(request.mock.callCount(), 1);
+});
+
+test('Handshake guard refuses missing, network-only, non-regtest and malformed chain replies', async t => {
+  let result: unknown;
+  const request = t.mock.method(globalThis, 'fetch', async () => Response.json({ result, error: null }));
+  const invalid: unknown[] = [
+    undefined, null, {}, { network: 'regtest' }, { testnet: true, blocks: 0 },
+    [], [{ chain: 'regtest' }], 'regtest', 0, false,
+    ...[undefined, null, false, 1, [], {}, '', 'main', 'test', 'testnet', 'simnet',
+      'REGTEST', ' regtest', 'regtest ', 'regtest\n', 'regtest\r\n', 'regtest\u2028',
+      'regtest\u2029', 'regtest\0', 'regtestx'].map(chain => ({ chain })),
+  ];
+  for (const value of invalid) {
+    result = value;
+    const before = request.mock.callCount();
+    await assert.rejects(requireRegtestNode(), /only disposable Handshake regtest allowed/,
+      'unexpected acceptance of ' + JSON.stringify(value));
+    assert.equal(request.mock.callCount(), before + 1, 'no retry or alternate-node fallback');
+  }
+});
+
+test('Handshake guard preserves RPC failure without trying another method or node', async t => {
+  const request = t.mock.method(globalThis, 'fetch', async () =>
+    Response.json({ result: { chain: 'regtest' }, error: { code: -1, message: 'fixture RPC failure' } }));
+  await assert.rejects(requireRegtestNode(), { message: 'getblockchaininfo: fixture RPC failure' });
+  assert.equal(request.mock.callCount(), 1);
+});
+
+test('Handshake guard preserves transport failure without fallback', async t => {
+  const failure = new Error('fixture transport failure');
+  const request = t.mock.method(globalThis, 'fetch', async () => { throw failure; });
+  await assert.rejects(requireRegtestNode(), error => error === failure);
+  assert.equal(request.mock.callCount(), 1);
+});
+
+test('Handshake guard refuses malformed JSON without fallback', async t => {
+  const request = t.mock.method(globalThis, 'fetch', async () => new Response('{'));
+  await assert.rejects(requireRegtestNode(), SyntaxError);
+  assert.equal(request.mock.callCount(), 1);
 });

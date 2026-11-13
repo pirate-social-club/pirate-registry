@@ -22,7 +22,7 @@ import { prepareSharedClaim, sharedClaimTypedData, sharedAcceptanceTypedData, su
 import { reconcileSharedClaim } from '../packages/sdk/src/shared-receipts.ts';
 import { prepareSharedRenewal } from '../packages/sdk/src/shared-names.ts';
 import { verifySharedRelease, approvedReleaseEnvironment, type SharedReleaseBuildTools } from '../scripts/verify-shared-release.ts';
-import { claimTlds, fund, node, ns as hnsRecord, REGTEST } from './lib/hsd.ts';
+import { claimTlds, fund, requireRegtestNode, ns as hnsRecord, REGTEST } from './lib/hsd.ts';
 import { assertPortsFree, startAnvil, startHsd, restartHnsd, stopAll } from './lib/processes.ts';
 
 const { values } = parseArgs({ options: { 'execute-local': { type: 'boolean', default: false },
@@ -38,8 +38,7 @@ async function main() {
   const buildTools = JSON.parse(readFileSync(values.tools, 'utf8')) as SharedReleaseBuildTools;
   const publicClient = createPublicClient({ transport: http(RPC, { retryCount: 0 }) });
   assert.equal(await publicClient.getChainId(), 31337, 'public chains forbidden');
-  const hnsInfo = await node<{ network: string }>('getinfo');
-  assert.equal(hnsInfo.network, 'regtest', 'only disposable Handshake regtest allowed');
+  await requireRegtestNode();
   const chain = defineChain({ id: 31337, name: 'disposable shared-names acceptance',
     nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 }, rpcUrls: { default: { http: [RPC] } } });
   const testClient = createTestClient({ chain, mode: 'anvil', transport: http(RPC) });
