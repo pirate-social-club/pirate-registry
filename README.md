@@ -8,15 +8,24 @@ The new Pirate-managed shared registry is specified in
 by canonical TLD and label across communities. Operators receive application
 permissions; Pirate administers the shared contract.
 
-This is uncompiled source awaiting independent review. No V3 deployment,
-admitted live namespace, generated ABI or passing test result is supplied.
-Compilation, ABI generation, type checks, tests and local acceptance are **UNRUN**
-until separately allocated. The two ABI output files are deliberately absent
-until generated from the actual compiler artifacts. Live currency, renewal fee,
-role addresses and finite issuance budgets still require explicit configuration.
+The [contract inventory and cutover boundary](docs/CONTRACTS.md) distinguishes
+this target from retained protocol-2 deployments. At exact source `56d63ad`,
+[CI43452867716](https://github.com/pirate-social-club/pirate-registry/actions/runs/43452867716)
+passes release solc and separate Solar tests, generated ABI byte comparison,
+type checks, all60 resolver/SDK Node cases and shared isolated local acceptance.
+The latter rebuilds committed source and checks full-node/SPV HNS resolution,
+separate signatures, durable transaction recovery, records, transfer and locked
+renewal. The generated ABI contains119 entries with three identity vectors.
 
-After verified pinned dependencies and a runtime allocation are supplied, the
-validation order is solc build, `npm run gen:shared-abi`, `npm run typecheck`,
+This verifies the contract interface for downstream migration work. Application
+membership/grant persistence remains fixture-only. No V3 live deployment,
+admitted live namespace or downstream source selection is claimed. Directory
+and caller migration, holder-preserving migration and actual service integration
+remain required. Live currency, renewal fee, role addresses and finite issuance
+budgets still require explicit configuration.
+
+To reproduce the validation with pinned dependencies and an allocated disposable
+runtime, the order is solc build, `npm run gen:shared-abi`, `npm run typecheck`,
 Foundry tests, `npm run test:shared`, and independent source rebuild/local
 acceptance. `npm run acceptance:shared -- --execute-local --tools APPROVED-TOOLS.json`
 requires separately managed disposable Anvil (31337 on port 18545), hsd regtest
