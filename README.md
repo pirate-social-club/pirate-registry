@@ -1,5 +1,31 @@
 # pirate-registry
 
+## Shared names V3 source draft
+
+The new Pirate-managed shared registry is specified in
+[SHARED-NAMES-V3.md](docs/SHARED-NAMES-V3.md), with explicit holder-preserving
+[migration requirements](docs/SHARED-NAMES-MIGRATION-V1.md). It namespaces names
+by canonical TLD and label across communities. Operators receive application
+permissions; Pirate administers the shared contract.
+
+This is uncompiled source awaiting independent review. No V3 deployment,
+admitted live namespace, generated ABI or passing test result is supplied.
+Compilation, ABI generation, type checks, tests and local acceptance are **UNRUN**
+until separately allocated. The two ABI output files are deliberately absent
+until generated from the actual compiler artifacts. Live currency, renewal fee,
+role addresses and finite issuance budgets still require explicit configuration.
+
+After verified pinned dependencies and a runtime allocation are supplied, the
+validation order is solc build, `npm run gen:shared-abi`, `npm run typecheck`,
+Foundry tests, `npm run test:shared`, and independent source rebuild/local
+acceptance. `npm run acceptance:shared -- --execute-local` requires separately
+managed disposable Anvil (31337 on port 18545), hsd regtest and hnsd; it does not
+start or stop services. `npm run verify:shared-release -- --source FILE --rpc URL`
+verifies an explicit V3 source without updating a deployment manifest.
+`node packages/sdk/src/shared-cli.ts --help` describes the read-only V3 CLI.
+
+## Existing protocol 2 baseline
+
 A permissionless Handshake SLD registry: anyone who controls a Handshake TLD
 can deploy an immutable registry on an EVM chain (MegaETH testnet in this
 release), sell second-level names as ERC-721 tokens for a pinned payment

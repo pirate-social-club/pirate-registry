@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pirate.shared-registry-source/1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "protocolVersion", "sourceCommit", "abiSha256", "chainId", "registry", "runtimeCodeHash", "deployment", "constructor", "compiler"],
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^0x[0-9a-f]{64}$", "not": {"const": "0x0000000000000000000000000000000000000000000000000000000000000000"}},
+    "address": {"type": "string", "pattern": "^0x[0-9a-fA-F]{40}$", "not": {"const": "0x0000000000000000000000000000000000000000"}}
+  },
+  "properties": {
+    "schema": {"const": "pirate.shared-registry-source/1"},
+    "protocolVersion": {"const": 3},
+    "sourceCommit": {"type": "string", "pattern": "^[0-9a-f]{40}$", "not": {"const": "0000000000000000000000000000000000000000"}},
+    "abiSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$", "not": {"const": "0000000000000000000000000000000000000000000000000000000000000000"}},
+    "chainId": {"enum": [6343, 31337]},
+    "registry": {"$ref": "#/$defs/address"},
+    "runtimeCodeHash": {"$ref": "#/$defs/hash"},
+    "deployment": {
+      "type": "object", "additionalProperties": false,
+      "required": ["blockNumber", "blockHash", "transactionHash"],
+      "properties": {
+        "blockNumber": {"type": "string", "pattern": "^(0|[1-9][0-9]*)$", "maxLength": 20, "description": "Implementation additionally enforces uint64 maximum."},
+        "blockHash": {"$ref": "#/$defs/hash"}, "transactionHash": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "constructor": {
+      "type": "object", "additionalProperties": false, "required": ["admin", "paymentToken", "treasury"],
+      "properties": {"admin": {"$ref": "#/$defs/address"}, "paymentToken": {"$ref": "#/$defs/address"}, "treasury": {"$ref": "#/$defs/address"}}
+    },
+    "compiler": {
+      "type": "object", "additionalProperties": false,
+      "required": ["version", "evmVersion", "optimizer", "optimizerRuns", "bytecodeHash", "cborMetadata"],
+      "properties": {
+        "version": {"const": "0.8.30"}, "evmVersion": {"const": "cancun"}, "optimizer": {"const": true},
+        "optimizerRuns": {"const": 200}, "bytecodeHash": {"const": "none"}, "cborMetadata": {"const": false}
+      }
+    }
+  }
+}
