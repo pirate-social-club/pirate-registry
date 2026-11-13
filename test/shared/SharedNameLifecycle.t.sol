@@ -4,6 +4,50 @@ import {SharedNameRegistryTestBase} from "./SharedNameRegistryTestBase.sol";
 import {ISharedNameRegistryV3 as IShared} from "../../src/interfaces/ISharedNameRegistryV3.sol";
 
 contract SharedNameLifecycleTest is SharedNameRegistryTestBase {
+    function testRenewalRejectsInvalidYearsAndPassedDeadline() public {
+        uint256 id = _issue("member001");
+        vm.expectRevert(IShared.InvalidYears.selector);
+        registry.renew(id, 0, 0, block.timestamp);
+        vm.expectRevert(IShared.InvalidYears.selector);
+        registry.renew(id, 6, 0, block.timestamp);
+        vm.expectRevert(IShared.DeadlinePassed.selector);
+        registry.renew(id, 1, RENEWAL_PRICE, block.timestamp - 1);
+    }
+
+    function testThirdPartyGraceRenewalAndRevenueEvents() public {
+        uint256 id = _issue("member001");
+        uint64 expiry = registry.expiresAt(id);
+        vm.warp(expiry);
+        token.mint(stranger, RENEWAL_PRICE);
+        vm.startPrank(stranger);
+        token.approve(address(registry), RENEWAL_PRICE);
+        vm.expectEmit(true, true, false, true, address(registry));
+        emit IShared.Renewed(id, uint64(uint256(expiry) + 365 days), stranger, RENEWAL_PRICE);
+        registry.renew(id, 1, RENEWAL_PRICE, block.timestamp);
+        vm.stopPrank();
+        assertEq(registry.ownerOf(id), holder);
+        assertEq(registry.policy(ns).totalClaims, 1);
+        vm.expectEmit(true, false, false, true, address(registry));
+        emit IShared.Swept(treasury, RENEWAL_PRICE);
+        registry.sweep();
+        assertEq(token.balanceOf(treasury), RENEWAL_PRICE);
+    }
+
+    function testZeroRenewalSponsorshipDuringGraceDoesNotRefillCounters() public {
+        vm.prank(admin);
+        registry.configurePolicy(ns, grantSigner, 0, 100);
+        uint256 id = _issue("member001");
+        uint64 expiry = registry.expiresAt(id);
+        vm.warp(uint256(expiry) + 29 days);
+        vm.prank(stranger);
+        registry.renew(id, 1, 0, block.timestamp);
+        assertEq(registry.expiresAt(id), uint256(expiry) + 365 days);
+        assertEq(registry.ownerOf(id), holder);
+        assertEq(registry.policy(ns).totalClaims, 1);
+        vm.warp(uint256(registry.expiresAt(id)) + 30 days);
+        assertEq(uint8(registry.status(id)), uint8(IShared.Status.Released));
+        assertEq(registry.policy(ns).totalClaims, 1);
+    }
     function testBoundariesAndFreshGenerationRecords() public {
         uint256 id = _issue("member001");
         vm.prank(holder);

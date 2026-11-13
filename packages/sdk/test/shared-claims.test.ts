@@ -4,7 +4,11 @@ import { hashTypedData, recoverTypedDataAddress, getAbiItem, keccak256, type Hex
 import { privateKeyToAccount } from 'viem/accounts';
 import { sharedRegistryAbi, sharedRegistryAbiSha256 } from '../../resolver/src/shared-abi.ts';
 import { sharedClaimTypedData, sharedAcceptanceTypedData, prepareSharedClaim, submitSharedClaim,
+  persistSharedClaimJournal, requireSharedClaimWindow,
   type SharedFreeClaim, type SharedClaimTransaction } from '../src/shared-claims.ts';
+import { promises as journalFs } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { randomUUID } from 'node:crypto';
 import { sharedNamespaceIdFor } from '../../resolver/src/shared-keys.ts';
 import { PinnedReader, type BlockTag } from '../../resolver/src/evm.ts';
 import { parseSharedRegistrySource } from '../../resolver/src/shared-manifest.ts';
@@ -34,11 +38,13 @@ test('claim signing fields derive from the compiler interface', () => {
 
 test('recipient consent binds the entire request and a distinct signing type', async () => {
   const digest = hashTypedData(sharedClaimTypedData(31337, registry, claim));
-  const acceptance = sharedAcceptanceTypedData(31337, registry, digest);
+  const acceptance = sharedAcceptanceTypedData(31337, registry, claim);
+  assert.equal(acceptance.message.claim.label, 'member001');
+  assert.equal(acceptance.message.claim.namespaceId, claim.namespaceId);
   const signature = await recipient.signTypedData(acceptance);
   assert.equal(await recoverTypedDataAddress({ ...acceptance, signature }), recipient.address);
   assert.notEqual(hashTypedData(acceptance), digest);
-  const changed = sharedAcceptanceTypedData(31337, registry, `0x${'3'.repeat(64)}` as Hex);
+  const changed = sharedAcceptanceTypedData(31337, registry, { ...claim, label: 'member002' });
   assert.notEqual(await recoverTypedDataAddress({ ...changed, signature }), recipient.address);
 });
 
@@ -47,7 +53,7 @@ function callerFixture(t: TestContext) {
   const currency = `0x${'3'.repeat(40)}` as const;
   const submitter = privateKeyToAccount(`0x${'0'.repeat(60)}3456`);
   const state = { now: 1010, expiredAuthority: false, persistenceFails: false, unknownBroadcast: false,
-    authorized: true, wrongTransaction: false, sequence: [] as string[], initialPrice: 0n };
+    authorized: true, wrongTransaction: false, sequence: [] as string[], initialPrice: 0n, signingDelay: 0 };
   const source = parseSharedRegistrySource({ schema: 'pirate.shared-registry-source/1', protocolVersion: 3,
     sourceCommit: '1'.repeat(40), abiSha256: sharedRegistryAbiSha256, chainId: 31337, registry,
     runtimeCodeHash: keccak256('0x60006000'), deployment: { blockNumber: '1', blockHash: h('4'), transactionHash: h('5') },
@@ -90,6 +96,7 @@ function callerFixture(t: TestContext) {
     authorizeOriginalOperation: async () => { assert.ok(state.authorized, 'authorization revoked'); },
     signTransaction: async (tx: SharedClaimTransaction) => {
       state.sequence.push('signed');
+      state.now += state.signingDelay;
       return submitter.signTransaction(state.wrongTransaction ? { ...tx, nonce: tx.nonce + 1 } : tx);
     },
     persistSignedTransaction: async () => {
@@ -97,7 +104,7 @@ function callerFixture(t: TestContext) {
       if (state.persistenceFails) throw new Error('durable store failed');
     } };
   const prepare = () => prepareSharedClaim(options, { communityId: claim.communityId, requestId: claim.requestId,
-    label: claim.label, recipient: recipient.address });
+    label: claim.label, recipient: recipient.address }, { signingMarginSeconds: 60, inclusionMarginSeconds: 60 });
   return { state, options, controls, prepare };
 }
 
@@ -105,12 +112,77 @@ test('claim preparation uses the quoted block clock and refuses premiums or stal
   const f = callerFixture(t);
   const op = await f.prepare();
   assert.equal(op.claim.issuedAt, 1000n);
-  assert.equal(op.claim.deadline, 1600n);
+  assert.equal(op.claim.deadline, 1900n);
   f.state.initialPrice = 1n;
   await assert.rejects(f.prepare(), /not_free/);
   f.state.initialPrice = 0n;
-  f.state.now = 1601;
-  await assert.rejects(f.prepare(), /authority_stale/);
+  f.state.now = 1781;
+  await assert.rejects(f.prepare(), /claim_window_insufficient/);
+});
+
+test('timing margins have exact inclusive boundary and survive signing delays', async t => {
+  const timing = { signingMarginSeconds: 60, inclusionMarginSeconds: 60 };
+  requireSharedClaimWindow(1900n, 1780, timing, 'prepare', 1000n);
+  assert.throws(() => requireSharedClaimWindow(1900n, 1781, timing, 'prepare', 1000n), /claim_window_insufficient/);
+  requireSharedClaimWindow(1900n, 1840, timing, 'broadcast', 1000n);
+  assert.throws(() => requireSharedClaimWindow(1900n, 1841, timing, 'broadcast', 1000n), /claim_window_insufficient/);
+  for (const invalid of [{ signingMarginSeconds: 0, inclusionMarginSeconds: 1 },
+    { signingMarginSeconds: 450, inclusionMarginSeconds: 450 }, { signingMarginSeconds: 1.5, inclusionMarginSeconds: 1 }]) {
+    assert.throws(() => requireSharedClaimWindow(1900n, 1000, invalid, 'prepare', 1000n), /timing_policy/);
+  }
+  const f = callerFixture(t);
+  const op = await f.prepare();
+  f.state.signingDelay = 831;
+  await assert.rejects(submitSharedClaim(f.options, op, f.controls), /claim_window_insufficient/);
+  assert.deepEqual(f.state.sequence, ['simulated', 'signed', 'persisted']);
+});
+
+test('journal synchronizes file and new directory links and refuses overwrite', async () => {
+  const anchor = fileURLToPath(new URL('../../../', import.meta.url));
+  const prefix = ['.ignore', 'shared-names-registry-20261113', 'journal-test-' + randomUUID()];
+  const payload = JSON.stringify({ raw: '0x02abcd', requestHash: 'fixture' });
+  const path = await persistSharedClaimJournal(anchor, prefix, 'operation.json', payload);
+  assert.equal(await journalFs.readFile(path, 'utf8'), payload);
+  assert.equal((await journalFs.stat(path)).mode & 0o777, 0o600);
+  await assert.rejects(persistSharedClaimJournal(anchor, prefix, 'operation.json', 'replacement'), /EEXIST/);
+  assert.equal(await journalFs.readFile(path, 'utf8'), payload);
+  await assert.rejects(persistSharedClaimJournal(anchor, ['..'], 'operation.json', payload), /journal_path/);
+});
+
+test('file or required directory sync failure prevents broadcast', async t => {
+  const f = callerFixture(t);
+  const op = await f.prepare();
+  const anchor = fileURLToPath(new URL('../../../', import.meta.url));
+  const realOpen = journalFs.open.bind(journalFs);
+  for (const failOn of ['file', 'directory', 'final-directory'] as const) {
+    f.state.sequence = [];
+    const opened: string[] = [];
+    let fileSynced = false;
+    const hook = t.mock.method(journalFs, 'open', async (...args: Parameters<typeof journalFs.open>) => {
+      const handle = await realOpen(...args);
+      const isFile = String(args[0]).endsWith('operation.json');
+      opened.push(isFile ? 'file' : 'directory');
+      const realSync = handle.sync.bind(handle);
+      t.mock.method(handle, 'sync', async () => {
+        if ((isFile ? 'file' : 'directory') === failOn || (failOn === 'final-directory' && !isFile && fileSynced)) {
+          throw new Error('injected ' + failOn + ' sync failure');
+        }
+        await realSync();
+        if (isFile) fileSynced = true;
+      });
+      return handle;
+    });
+    await assert.rejects(submitSharedClaim(f.options, op, { ...f.controls,
+      persistSignedTransaction: async (original, raw, hash) => {
+        await persistSharedClaimJournal(anchor,
+          ['.ignore', 'shared-names-registry-20261113', 'journal-fault-' + randomUUID()],
+          'operation.json', JSON.stringify({ requestHash: original.requestHash, raw, hash }));
+      } }), /sync failure/);
+    assert.ok(opened.includes(failOn === 'final-directory' ? 'directory' : failOn));
+    if (failOn === 'final-directory') assert.equal(fileSynced, true);
+    assert.ok(!f.state.sequence.includes('broadcast'));
+    hook.mock.restore();
+  }
 });
 
 test('signed bytes persist before broadcast, including an unknown broadcast outcome', async t => {

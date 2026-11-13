@@ -51,3 +51,9 @@ not erase those actions or revive superseded authorizations. Lost TLD authority
 stops new issuance and is surfaced to holders; existing NFT data is retained.
 The operational recovery and any compensation/extension policy must be explicit
 before a real namespace is admitted. This source grants no live migration power.
+
+Receipt reconciliation remains pinned to the original source after a migration
+or external repointing. A new resolver source cannot erase original consumption
+or justify a second entitlement. Historical consumption and current destination
+ownership/resolution are separate proofs; the migration manifest must preserve
+their explicit relationship rather than rewriting the original receipt.

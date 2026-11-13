@@ -24,15 +24,20 @@ function object(value: unknown, keys: string[]): Record<string, unknown> {
 }
 
 function hash(value: unknown, prefix = true): string {
-  requireShared(typeof value === 'string' && (prefix ? /^0x[0-9a-f]{64}$/ : /^[0-9a-f]{64}$/).test(value)
-    && !/^(0x)?0{64}$/.test(value), 'source_invalid', 'expected nonzero canonical digest');
+  requireShared(typeof value === 'string' && value.length === (prefix ? 66 : 64)
+    && (!prefix || value.startsWith('0x')) && !/[^0-9a-f]/.test(prefix ? value.slice(2) : value)
+    && (prefix ? value.slice(2) : value) !== '0'.repeat(64), 'source_invalid', 'expected nonzero canonical digest');
   return value;
 }
 
 function address(value: unknown): Address {
-  requireShared(typeof value === 'string' && /^0x[0-9a-fA-F]{40}$/.test(value)
-    && !/^0x0{40}$/.test(value), 'source_invalid', 'expected nonzero address');
-  return getAddress(value);
+  requireShared(typeof value === 'string' && value.length === 42 && value.startsWith('0x')
+    && !/[^0-9a-fA-F]/.test(value.slice(2)) && value !== `0x${'0'.repeat(40)}`,
+  'source_invalid', 'expected nonzero address');
+  const canonical = getAddress(value);
+  requireShared(value === value.toLowerCase() || value === canonical,
+    'source_invalid', 'mixed-case address checksum differs');
+  return canonical;
 }
 
 /** Validation is not trust: the caller must independently select this exact source. */
@@ -42,10 +47,11 @@ export function parseSharedRegistrySource(input: unknown): SharedRegistrySource 
   requireShared(o.schema === 'pirate.shared-registry-source/1' && o.protocolVersion === 3,
     'source_invalid', 'unsupported source protocol');
   requireShared(o.chainId === 6343 || o.chainId === 31337, 'chain_not_allowed', 'only testnet/local sources are supported');
-  requireShared(typeof o.sourceCommit === 'string' && /^[0-9a-f]{40}$/.test(o.sourceCommit)
-    && !/^0{40}$/.test(o.sourceCommit), 'source_invalid', 'expected exact source commit');
+  requireShared(typeof o.sourceCommit === 'string' && o.sourceCommit.length === 40
+    && !/[^0-9a-f]/.test(o.sourceCommit) && o.sourceCommit !== '0'.repeat(40), 'source_invalid', 'expected exact source commit');
   const d = object(o.deployment, ['blockNumber', 'blockHash', 'transactionHash']);
-  requireShared(typeof d.blockNumber === 'string' && /^(0|[1-9][0-9]*)$/.test(d.blockNumber)
+  requireShared(typeof d.blockNumber === 'string' && d.blockNumber.length >= 1 && d.blockNumber.length <= 20
+    && !/[^0-9]/.test(d.blockNumber) && (d.blockNumber === '0' || d.blockNumber[0] !== '0')
     && BigInt(d.blockNumber) <= 0xffffffffffffffffn, 'source_invalid', 'invalid deployment block');
   const c = object(o.constructor, ['admin', 'paymentToken', 'treasury']);
   const compiler = object(o.compiler, ['version', 'evmVersion', 'optimizer', 'optimizerRuns', 'bytecodeHash', 'cborMetadata']);

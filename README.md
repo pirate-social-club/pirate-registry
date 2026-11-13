@@ -18,9 +18,10 @@ role addresses and finite issuance budgets still require explicit configuration.
 After verified pinned dependencies and a runtime allocation are supplied, the
 validation order is solc build, `npm run gen:shared-abi`, `npm run typecheck`,
 Foundry tests, `npm run test:shared`, and independent source rebuild/local
-acceptance. `npm run acceptance:shared -- --execute-local` requires separately
-managed disposable Anvil (31337 on port 18545), hsd regtest and hnsd; it does not
-start or stop services. `npm run verify:shared-release -- --source FILE --rpc URL`
+acceptance. `npm run acceptance:shared -- --execute-local --tools APPROVED-TOOLS.json`
+requires separately managed disposable Anvil (31337 on port 18545), hsd regtest
+and hnsd. Local mode does not start or stop services; isolated CI has an explicit
+`--start-local` mode. `npm run verify:shared-release -- --source FILE --rpc URL --tools APPROVED-TOOLS.json`
 verifies an explicit V3 source without updating a deployment manifest.
 `node packages/sdk/src/shared-cli.ts --help` describes the read-only V3 CLI.
 
@@ -116,3 +117,34 @@ code hashes, are always rebuilt with the pinned solc.
 The compiler is pinned to solc 0.8.30 with `evm_version = "cancun"`,
 optimizer 200 runs and no CBOR metadata, so runtime bytecode is reproducible
 from source for the release manifest (SPEC section 7).
+
+## Protocol 3 corrective checkpoint
+
+The audit repair is source-only until allocated generation and verification.
+`docs/SHARED-NAMES-V3.md` revision 3 specifies nested recipient consent,
+observation-bound consumed receipts, explicit signing/inclusion margins and
+durable journal ordering. Renewal sponsorship, locked prices, lifetime issuance
+counters and protocol-2 rights are unchanged. No live fee, role or gas policy is
+selected. Multisig provisioning and payment spending caps remain deferred.
+
+Under Root's later allocation: build with the approved solc profile, run
+`npm run gen:shared-abi`, format the admitted Solidity files, then verify both
+generated ABI outputs and the literal vector sections in
+`test/shared/SharedNameKeys.t.sol` and `packages/resolver/test/shared-keys.test.ts`.
+The literal sections deliberately fail until real generation populates them.
+Run the existing V2 gates, `npm run test:shared`, and the shared acceptance gate.
+No generated ABI, fabricated vector or code hash is included in this source turn.
+
+Local acceptance requires disposable Anvil started with
+`anvil --host 127.0.0.1 --port 18545 --chain-id 31337 --slots-in-an-epoch 1 --silent`,
+plus Root-owned hsd/hnsd regtest services. Before deployment/funding the shared
+harness mines three local blocks and requires safe/finalized lag of one/two
+blocks; it never falls back to latest. The owning invocation is
+`npm run acceptance:shared -- --execute-local --tools APPROVED-TOOLS.json`.
+`--start-local` is restricted to an isolated CI runner. Tool JSON must specify
+absolute `forgePath`, `solcPath`, their approved SHA-256 byte pins and exact
+`solcVersion`. Local pins come from Root's verified preparation. CI records its
+installed tool provenance separately; that is not a local release acceptance.
+The release verifier requires `--tools` too and refuses ambient Git/Foundry/Solidity
+override variables. No dependency installation or runtime is authorized by this
+README alone.

@@ -133,7 +133,7 @@ interface ISharedNameRegistryV3 {
     function quote(bytes32 namespaceId, bytes32 communityId, string calldata label)
         external view returns (NameQuote memory);
     function requestHash(FreeClaim calldata claim) external view returns (bytes32);
-    function recipientAcceptanceHash(bytes32 claimHash) external view returns (bytes32);
+    function recipientAcceptanceHash(FreeClaim calldata claim) external view returns (bytes32);
     function claimFreeName(FreeClaim calldata claim, bytes calldata grantSignature,
         bytes calldata recipientSignature) external returns (uint256);
     function claimReceipt(bytes32 communityId, bytes32 requestId) external view returns (ClaimReceipt memory);

@@ -2,8 +2,14 @@
 pragma solidity 0.8.30;
 import {SharedNameRegistryTestBase} from "./SharedNameRegistryTestBase.sol";
 import {ISharedNameRegistryV3 as IShared} from "../../src/interfaces/ISharedNameRegistryV3.sol";
+import {SharedNameRegistryV3} from "../../src/SharedNameRegistryV3.sol";
 
 contract SharedNameRegistryTest is SharedNameRegistryTestBase {
+    function testUnsupportedChainCannotDeploy() public {
+        vm.chainId(1);
+        vm.expectRevert(IShared.UnsupportedChain.selector);
+        new SharedNameRegistryV3(admin, address(token), treasury);
+    }
     function testFreeFirstYearAndSeparateLockedRenewal() public {
         uint256 balance = token.balanceOf(holder);
         uint256 id = _issue("member001");

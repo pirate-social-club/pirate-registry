@@ -27,7 +27,9 @@ contract SharedNameRegistryV3 is ERC721, EIP712, ReentrancyGuardTransient, IShar
     bytes32 public constant CLAIM_TYPEHASH = keccak256(
         "FreeClaim(bytes32 requestId,bytes32 communityId,bytes32 namespaceId,string label,address recipient,uint64 generation,uint64 authorityRevision,uint64 policyRevision,uint64 scopeRevision,uint64 issuedAt,uint64 deadline,uint8 years_,uint256 maxCost)"
     );
-    bytes32 public constant ACCEPTANCE_TYPEHASH = keccak256("ClaimAcceptance(bytes32 requestHash)");
+    bytes32 public constant ACCEPTANCE_TYPEHASH = keccak256(
+        "ClaimAcceptance(FreeClaim claim)FreeClaim(bytes32 requestId,bytes32 communityId,bytes32 namespaceId,string label,address recipient,uint64 generation,uint64 authorityRevision,uint64 policyRevision,uint64 scopeRevision,uint64 issuedAt,uint64 deadline,uint8 years_,uint256 maxCost)"
+    );
 
     struct TokenState {
         bytes32 namespaceId;
@@ -96,7 +98,7 @@ contract SharedNameRegistryV3 is ERC721, EIP712, ReentrancyGuardTransient, IShar
         uint64 validUntil, bool issuanceEnabled) external onlyAdmin
     {
         Authority storage a = _authority(namespaceId);
-        if (evidenceHash == bytes32(0) || observedAt > block.timestamp || validUntil <= block.timestamp
+        if (evidenceHash == bytes32(0) || observedAt < a.observedAt || observedAt > block.timestamp || validUntil <= block.timestamp
             || validUntil <= observedAt || uint256(validUntil) - observedAt > MAX_AUTHORITY_LIFETIME) {
             revert InvalidConfiguration();
         }
@@ -200,17 +202,21 @@ contract SharedNameRegistryV3 is ERC721, EIP712, ReentrancyGuardTransient, IShar
     }
 
     function requestHash(FreeClaim calldata c) public view returns (bytes32) {
+        return _hashTypedDataV4(_claimStructHash(c));
+    }
+
+    function _claimStructHash(FreeClaim calldata c) private pure returns (bytes32) {
         // All concatenated words are static ABI words. This is exactly the
         // EIP-712 encoding and avoids an oversized compiler operand stack.
         bytes memory identity = abi.encode(CLAIM_TYPEHASH, c.requestId, c.communityId, c.namespaceId,
             keccak256(bytes(c.label)), c.recipient);
         bytes memory terms = abi.encode(c.generation, c.authorityRevision, c.policyRevision, c.scopeRevision,
             c.issuedAt, c.deadline, c.years_, c.maxCost);
-        return _hashTypedDataV4(keccak256(bytes.concat(identity, terms)));
+        return keccak256(bytes.concat(identity, terms));
     }
 
-    function recipientAcceptanceHash(bytes32 claimHash) public view returns (bytes32) {
-        return _hashTypedDataV4(keccak256(abi.encode(ACCEPTANCE_TYPEHASH, claimHash)));
+    function recipientAcceptanceHash(FreeClaim calldata c) public view returns (bytes32) {
+        return _hashTypedDataV4(keccak256(abi.encode(ACCEPTANCE_TYPEHASH, _claimStructHash(c))));
     }
 
     function claimFreeName(FreeClaim calldata c, bytes calldata grantSignature, bytes calldata recipientSignature)
@@ -268,7 +274,7 @@ contract SharedNameRegistryV3 is ERC721, EIP712, ReentrancyGuardTransient, IShar
         // Validate canonical label before external signature callbacks.
         nameKeyFor(c.namespaceId, c.label);
         if (!SignatureChecker.isValidSignatureNow(p.grantSigner, digest, grantSignature)
-            || !SignatureChecker.isValidSignatureNow(c.recipient, recipientAcceptanceHash(digest), recipientSignature)) {
+            || !SignatureChecker.isValidSignatureNow(c.recipient, recipientAcceptanceHash(c), recipientSignature)) {
             revert InvalidSignature();
         }
     }

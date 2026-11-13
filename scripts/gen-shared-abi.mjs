@@ -1,17 +1,14 @@
 // Source-only until an allocated solc build has produced both artifacts.
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { sharedNamespaceIdFor, sharedNameKeyFor, sharedTokenIdFor } from '../packages/resolver/src/shared-keys.ts';
+import { keccak256, stringToHex } from 'viem';
+import { requireSharedCompilerProfile } from './verify-shared-release.ts';
 
 const load = path => JSON.parse(readFileSync(new URL(`../out/${path}`, import.meta.url), 'utf8'));
 const implementation = load('SharedNameRegistryV3.sol/SharedNameRegistryV3.json');
 const contractInterface = load('ISharedNameRegistryV3.sol/ISharedNameRegistryV3.json');
 const metadata = typeof implementation.metadata === 'string' ? JSON.parse(implementation.metadata) : implementation.metadata;
-if (!metadata?.compiler?.version?.startsWith('0.8.30+') || metadata.settings?.evmVersion !== 'cancun'
-  || metadata.settings?.optimizer?.enabled !== true || metadata.settings?.optimizer?.runs !== 200
-  || metadata.settings?.metadata?.bytecodeHash !== 'none' || metadata.settings?.metadata?.appendCBOR !== false) {
-  throw new Error('artifact compiler profile differs from protocol 3');
-}
+requireSharedCompilerProfile(metadata);
 const normalize = value => {
   if (Array.isArray(value)) return value.map(normalize);
   if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value)
@@ -29,11 +26,35 @@ const abiSha256 = createHash('sha256').update(JSON.stringify(abi)).digest('hex')
 const identityVectors = [
   ['testtld', 'member001', 1n], ['othertld', 'member001', 1n], ['testtld', 'member001', 2n],
 ].map(([tld, label, generation]) => {
-  const namespaceId = sharedNamespaceIdFor(tld);
-  const nameKey = sharedNameKeyFor(namespaceId, label);
+  // Independent static-word ABI encoder: never import the implementation helpers.
+  const words = (...values) => `0x${values.map(value => value.slice(2)).join('')}`;
+  const domain = text => keccak256(stringToHex(text));
+  const namespaceId = keccak256(words(domain('pirate.namespace/1'), domain(tld)));
+  const nameKey = keccak256(words(domain('pirate.name/1'), namespaceId, domain(label)));
+  const tokenId = BigInt(keccak256(words(domain('pirate.name-token/1'), nameKey,
+    `0x${generation.toString(16).padStart(64, '0')}`))).toString();
   return { tld, label, generation: generation.toString(), namespaceId, nameKey,
-    tokenId: sharedTokenIdFor(nameKey, generation).toString() };
+    tokenId };
 });
+// Root's allocated generation fills literal sections in both test languages.
+// CI regenerates and diffs them; tests compare these literals with each implementation.
+function replaceVectorSection(path, content) {
+  const file = new URL(`../${path}`, import.meta.url);
+  const text = readFileSync(file, 'utf8');
+  const start = '// BEGIN ALLOCATED IDENTITY VECTORS';
+  const end = '// END ALLOCATED IDENTITY VECTORS';
+  if (text.split(start).length !== 2 || text.split(end).length !== 2) throw new Error('vector section missing/ambiguous');
+  const a = text.indexOf(start) + start.length;
+  const b = text.indexOf(end);
+  if (a >= b) throw new Error('vector section reversed');
+  writeFileSync(file, text.slice(0, a) + '\n' + content + '\n' + text.slice(b));
+}
+replaceVectorSection('packages/resolver/test/shared-keys.test.ts',
+  `const literalVectors = ${JSON.stringify(identityVectors, null, 2)} as const;`);
+replaceVectorSection('test/shared/SharedNameKeys.t.sol',
+  '    function testAllocatedLiteralIdentityVectors() public view {\n'
+  + identityVectors.map(v => `        _assertLiteralVector("${v.tld}", "${v.label}", ${v.generation}, ${v.namespaceId}, ${v.nameKey}, ${v.tokenId});`).join('\n')
+  + '\n    }\n    ');
 const bundle = { schema: 'pirate.shared-registry-abi/1', protocolVersion: 3, abiSha256, abi, identityVectors };
 mkdirSync(new URL('../packages/resolver/abi/', import.meta.url), { recursive: true });
 writeFileSync(new URL('../packages/resolver/abi/shared-name-registry-v3.json', import.meta.url), `${JSON.stringify(bundle, null, 2)}\n`);

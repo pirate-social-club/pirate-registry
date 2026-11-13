@@ -20,6 +20,31 @@ contract SharedNameKeysTest is Test {
         assertNotEq(probe.token(name, 1), probe.token(name, 2));
         assertEq(first, keccak256(abi.encode(keccak256("pirate.namespace/1"), keccak256("testtld"))));
         assertEq(name, keccak256(abi.encode(keccak256("pirate.name/1"), first, keccak256("member001"))));
+        assertEq(probe.token(name, 1), uint256(keccak256(abi.encode(keccak256("pirate.name-token/1"), name, uint64(1)))));
+    }
+
+    function _assertLiteralVector(string memory tld, string memory label, uint64 generation,
+        bytes32 namespaceId, bytes32 nameKey, uint256 tokenId) private view
+    {
+        assertEq(probe.namespace(tld), namespaceId);
+        assertEq(probe.name(namespaceId, label), nameKey);
+        assertEq(probe.token(nameKey, generation), tokenId);
+    }
+
+    // BEGIN ALLOCATED IDENTITY VECTORS
+    function testAllocatedLiteralIdentityVectors() public pure {
+        revert("UNGENERATED: Root must allocate independent literal vector computation");
+    }
+    // END ALLOCATED IDENTITY VECTORS
+
+    function testRejectsTrailingLineTerminators() public {
+        bytes[4] memory suffixes = [bytes(hex"0a"), bytes(hex"0d0a"), bytes(hex"e280a8"), bytes(hex"e280a9")];
+        for (uint256 i; i < suffixes.length; ++i) {
+            vm.expectRevert(SharedNameKeys.NonCanonicalLabel.selector);
+            probe.namespace(string(bytes.concat(bytes("testtld"), suffixes[i])));
+            vm.expectRevert(SharedNameKeys.NonCanonicalLabel.selector);
+            probe.name(bytes32(uint256(1)), string(bytes.concat(bytes("member001"), suffixes[i])));
+        }
     }
 
     function testRejectsNonCanonicalLabelsAndZeroIdentities() public {

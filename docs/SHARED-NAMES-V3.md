@@ -1,7 +1,7 @@
 # Shared names protocol 3
 
 This is the normative source specification for `pirate.shared-names/3`, revision
-2, authored before its affected implementation. Compilation, generated ABI, test vectors,
+3, authored before its affected implementation. Compilation, generated ABI, test vectors,
 independent review and local acceptance are pending. It describes no deployed
 registry, admitted live namespace, fee selection or funded service. Protocol 2
 and its specification, deployments, manifests and locked terms remain unchanged.
@@ -26,6 +26,10 @@ Registration inputs are canonical ASCII lowercase LDH strings of 1 through 63
 bytes, without leading/trailing hyphens or hyphens in both positions 3 and 4.
 This rejects `xn--`, Unicode, uppercase, dots, trailing root dots and whitespace.
 TLD and label helpers reject invalid inputs rather than normalizing them. Member
+validation consumes the entire string, including rejecting LF, CRLF, U+2028 and
+U+2029 suffixes. Descriptors likewise require exact-length digests/commits and
+canonical unsigned decimal block strings. Mixed-case addresses must have a
+valid EIP-55 checksum; lowercase addresses are normalized after validation. Member
 issuance additionally requires 8 through 63 bytes. There is no particular-name
 exception. DNS read presentation may separately normalize case/root dots before
 passing canonical labels to these helpers.
@@ -65,6 +69,8 @@ record. It starts closed, without configured pricing or issuance scopes.
 `attestNamespace` records an evidence digest, observation time, expiry and a
 monotonic authority revision. Evidence must be nonzero, observed no later than
 the current block, still valid, and valid for at most 24 hours from observation.
+Observation timestamps cannot move backwards. Equal timestamps are permitted
+for a corrected evidence record; every accepted attestation advances revision.
 Every refresh or issuance toggle advances the revision and invalidates old
 grants. A pause affects new issuance immediately. It does not change ownership,
 record rights, locked renewal terms or ordinary holder renewals.
@@ -133,8 +139,16 @@ EIP-712. The independently held grant signer signs it after checking current
 intended membership, installation/grant binding, namespace scope, recipient,
 quote and bounded gas authorization. Private account/installation identifiers
 stay in the durable application grant; they are not added to public calldata.
-The recipient separately signs the EIP-712 type
-`ClaimAcceptance(bytes32 requestHash)`. EOA and ERC-1271 signatures are supported.
+The recipient separately signs a nested `ClaimAcceptance(FreeClaim claim)`.
+Its EIP-712 encoded type is that string followed immediately by the complete
+`FreeClaim(...)` definition above. The message contains the full claim, so wallets
+can display label, recipient, namespace, term and deadline instead of an opaque
+digest. Namespace/community identifiers remain hashes; clients must display the
+verified human-readable namespace and locked renewal quote alongside consent.
+The issuer `FreeClaim` digest is unchanged. `recipientAcceptanceHash(FreeClaim)`
+returns the recipient digest, not the issuer digest. EOA and ERC-1271 signatures
+are supported. Code-bearing EIP-7702 accounts require an ERC-1271-compatible
+delegate under the pinned SignatureChecker; no unreviewed EOA fallback exists.
 Both signatures are required, including when recipient equals submitter. A
 grant lasts at most 15 minutes; issued-at cannot be in the future and deadline
 is inclusive. Every revision and expected generation must still match.
@@ -149,17 +163,43 @@ a failed signature, cap, payment or receiver rolls the whole transaction back.
 
 SDK preparation verifies an explicit source and one canonical block, obtains
 the quote, and binds exact fields. Issued-at uses that block's timestamp so
-simulation at the same block is possible; the deadline must also remain in the
-future by the host clock. A stale selected block cannot extend grant lifetime.
-A pending/unknown broadcast retains the
-original signed operation and transaction hash; it must not silently generate
-a new request or retry with a fresh nonce. Recovery rechecks application
-authorization, finds the original receipt/event at its recorded canonical
-block and verifies successful transaction status, selected contract, complete
-event fields, exact current name/token/generation/recipient and unexpired term.
-Reorged, ambiguous, missing or changed-holder results are not reported as claim
-success. This library supplies reconciliation primitives; durable storage and
-exclusive operation leases belong to the admitted application caller.
+simulation at the same block is possible. Deadline is bounded by issued-at plus
+900 seconds and authority expiry. Callers explicitly provide positive signing
+and inclusion margins whose sum is below 900 seconds; preparation requires both
+remaining, and broadcast requires the inclusion margin after signing and durable
+persistence. An insufficient window has its own error and reports selected-block
+lag. No default operational gas or timing policy is selected. Chain 6343 safe
+lag must be measured before selecting those margins for a live service.
+
+A pending/unknown broadcast retains the original signed operation and transaction
+hash; it must not silently generate a new request or retry with a fresh nonce.
+Prepared operations use `pirate.member-name-claim/2`; the unaccepted earlier
+source shape is not silently upgraded or submitted with a different consent.
+Automatic nonce replacement/cancellation is not implemented; a later admitted
+caller must retain the original request and explicitly coordinate that operation.
+Persistence must fsync the file and its containing directory, including every
+newly created directory link, before permitting broadcast. Any persistence or
+sync failure prevents send. Durable storage and exclusive operation leases belong
+to the admitted caller; the local acceptance journal exercises the same boundary.
+
+Recovery rechecks application authorization and verifies the original pinned
+source/deployment, token namespace, permanent claimReceipt, complete original
+event and canonical successful transaction receipt. Live Handshake delegation,
+fresh issuance authority and unchanged holder are not prerequisites for proving
+consumption. The event must be emitted by the selected registry and present in
+that receipt; the outer transaction may target a contract submitter. A different
+transaction hash is reported as correlation information, not rejected if it
+proves the same original request. A consumed result carries immutable original
+recipient/term and separate current generation/registrant/status/expiry. It does
+not authorize app activation: current membership, active ownership and fresh
+resolution eligibility require separate checks. Callback transfer, later transfer,
+expiry and re-registration cannot turn a consumed grant into an unused grant.
+
+With no receipt, recovery reports pending until the selected canonical block is
+strictly past the grant deadline, then expired-unconsumed at that observation.
+All observations remain bound to block hash and may be invalidated by a reorg.
+Conflict, ambiguous event, reorg, unavailable source and authorization failure
+remain errors/unknown; none means unused or authorizes automatic reissue.
 
 ## Lifecycle and fees
 
@@ -184,6 +224,10 @@ The admitted payment token must have ordinary fixed-unit ERC-20 transfers;
 fee-on-transfer and rebasing currencies are unsupported. Token issuer pauses or
 blacklists can block paid renewals or revenue sweeps. Zero-cost issuance and
 explicitly zero-cost renewals do not call token transfer functions.
+Zero-price renewal sponsorship is retained: any account can keep extending a
+name within the same term bounds. Names still expire without renewal; lifetime
+issuance budgets never refill when a name expires. This repair changes neither
+that policy nor the 24-hour resolution authority requirement.
 
 Renewal price, currency/token address and operational policy values remain
 deployment/admission decisions. Fixture values are only local test data. Paid
@@ -226,6 +270,17 @@ The generator emits identity test vectors alongside the ABI using the owning
 encoding functions. Solidity tests independently check the formulas; TypeScript
 tests reproduce the generated vectors and local acceptance compares each vector
 against the compiled contract's helpers.
+Independent literal vector sections in the existing Solidity and TypeScript key
+tests must be populated by Root's later allocated computation and compared with
+both implementations. Until populated, those explicit gates fail; fabricated
+hash literals or a same-helper-only check cannot satisfy this gate.
+
+The release verifier uses explicitly pinned Forge/solc binaries, approved child
+environments and archived committed sources plus committed dependency gitlinks.
+It refuses ambient Git/Foundry/Solidity overrides, symlinks and unpinned source
+imports, checks artifact metadata source hashes against that archived closure,
+and rejects viaIR=true (false or absent is the accepted non-IR profile). No local
+untracked library content or external configuration participates in the rebuild.
 Prepared tests and source without compilation are explicitly unverified.
 
 ## Required acceptance

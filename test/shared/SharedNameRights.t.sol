@@ -4,6 +4,25 @@ import {SharedNameRegistryTestBase} from "./SharedNameRegistryTestBase.sol";
 import {ISharedNameRegistryV3 as IShared} from "../../src/interfaces/ISharedNameRegistryV3.sol";
 
 contract SharedNameRightsTest is SharedNameRegistryTestBase {
+    function testRecordEventsAndSizeBoundary() public {
+        uint256 id = _issue("member001");
+        bytes32 key = bytes32(uint256(1));
+        vm.startPrank(holder);
+        vm.expectEmit(true, true, false, true, address(registry));
+        emit IShared.RecordSet(id, key, hex"0102");
+        registry.setRecord(id, key, hex"0102");
+        registry.setRecord(id, key, new bytes(1024));
+        vm.expectRevert(IShared.RecordTooLarge.selector);
+        registry.setRecord(id, key, new bytes(1025));
+        vm.expectEmit(true, true, false, true, address(registry));
+        emit IShared.RecordManagerSet(id, submitter);
+        registry.setRecordManager(id, submitter);
+        vm.expectEmit(true, true, false, true, address(registry));
+        emit IShared.RecordManagerSet(id, address(0));
+        registry.transferFrom(holder, stranger, id);
+        vm.stopPrank();
+        assertEq(registry.record(id, key).length, 1024);
+    }
     function testAdminAndSubmitterCannotSeizeOrEdit() public {
         uint256 id = _issue("member001");
         vm.prank(admin);

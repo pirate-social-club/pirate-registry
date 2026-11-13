@@ -58,7 +58,7 @@ export async function verifySharedSource(options: SharedSourceOptions) {
     'source_mismatch', 'protocol or renewal currency differs');
   requireShared(deploymentBlock.hash === source.deployment.blockHash && deploymentReceipt.blockHash === deploymentBlock.hash
     && deploymentReceipt.blockNumber === BigInt(source.deployment.blockNumber)
-    && deploymentReceipt.status === 'success' && deploymentReceipt.contractAddress !== null
+    && deploymentReceipt.status === 'success' && typeof deploymentReceipt.contractAddress === 'string'
     && getAddress(deploymentReceipt.contractAddress) === source.registry, 'deployment_mismatch', 'deployment receipt is not canonical');
   const finish = async () => {
     checkTime();

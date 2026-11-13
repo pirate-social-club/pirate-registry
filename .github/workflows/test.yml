@@ -68,13 +68,41 @@ jobs:
       - name: Install packages
         run: npm ci
 
+      - name: Regenerate shared ABI and independent identity vectors
+        run: |
+          npm run gen:shared-abi
+          forge fmt test/shared/SharedNameKeys.t.sol
+          git diff --exit-code -- packages/resolver/src/shared-abi.ts packages/resolver/abi/shared-name-registry-v3.json packages/resolver/test/shared-keys.test.ts test/shared/SharedNameKeys.t.sol
+          test -f packages/resolver/src/shared-abi.ts
+          test -f packages/resolver/abi/shared-name-registry-v3.json
+          test -z "$(git ls-files --others --exclude-standard -- packages/resolver/src/shared-abi.ts packages/resolver/abi/shared-name-registry-v3.json)"
+
       - name: Type-check and unit-test the resolver and SDK
         run: |
           npm run typecheck
           npm run test:ts
+          node --test packages/sdk/test/shared-*.test.ts
 
       - name: Build hnsd for regtest
         run: docker build -t pirate-registry-hnsd:v2.0.0-regtest harness/hnsd
 
       - name: Local acceptance (anvil, hsd regtest, hnsd)
         run: node harness/acceptance.ts
+
+      - name: Record isolated CI tool provenance for shared rebuild
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, pathlib, re, shutil, subprocess
+          forge = pathlib.Path(shutil.which('forge')).resolve()
+          solc = pathlib.Path.home() / '.svm/0.8.30/solc-0.8.30'
+          version = re.search(r'Version: (0\.8\.30\+commit\.[0-9a-f]{8})', subprocess.check_output([str(solc), '--version'], text=True))
+          if version is None:
+              raise SystemExit('unexpected installed solc version')
+          output = pathlib.Path('.ignore/shared-names-registry-20261113/ci-tools.json')
+          output.parent.mkdir(parents=True, exist_ok=True)
+          output.write_text(json.dumps({'forgePath': str(forge), 'forgeSha256': hashlib.sha256(forge.read_bytes()).hexdigest(),
+              'solcPath': str(solc), 'solcSha256': hashlib.sha256(solc.read_bytes()).hexdigest(), 'solcVersion': version.group(1)}))
+          PY
+
+      - name: Shared local acceptance (fresh isolated services)
+        run: npm run acceptance:shared -- --execute-local --start-local --tools .ignore/shared-names-registry-20261113/ci-tools.json

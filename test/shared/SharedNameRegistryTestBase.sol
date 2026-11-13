@@ -68,7 +68,7 @@ abstract contract SharedNameRegistryTestBase is Test {
     function _signatures(IShared.FreeClaim memory c) internal view returns (bytes memory grant, bytes memory consent) {
         bytes32 digest = registry.requestHash(c);
         grant = _signature(GRANT_KEY, digest);
-        consent = _signature(HOLDER_KEY, registry.recipientAcceptanceHash(digest));
+        consent = _signature(HOLDER_KEY, registry.recipientAcceptanceHash(c));
     }
 
     function _submit(IShared.FreeClaim memory c) internal returns (uint256) {

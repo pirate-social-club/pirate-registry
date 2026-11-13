@@ -12,6 +12,7 @@ const { values, positionals } = parseArgs({ allowPositionals: true, options: {
   source: { type: 'string' }, 'source-sha256': { type: 'string' }, rpc: { type: 'string' },
   hsd: { type: 'string' }, tld: { type: 'string' }, name: { type: 'string' }, label: { type: 'string' },
   community: { type: 'string' }, request: { type: 'string' }, recipient: { type: 'string' },
+  'signing-margin': { type: 'string' }, 'inclusion-margin': { type: 'string' },
   'trust-remote-hsd': { type: 'boolean', default: false },
   help: { type: 'boolean', default: false },
 } });
@@ -20,6 +21,7 @@ async function main() {
   if (values.help) {
     console.log('verify | resolve --name NAME | quote --community ID --label LABEL | prepare-claim --community ID --label LABEL --request ID --recipient ADDRESS\n'
       + 'Required: --source FILE --source-sha256 SHA256 --rpc URL --hsd URL --tld TLD\n'
+      + 'prepare-claim also requires positive --signing-margin SECONDS --inclusion-margin SECONDS.\n'
       + 'Remote Handshake nodes require --trust-remote-hsd. Read-only: no signing, submission or token approvals.');
     return;
   }
@@ -49,8 +51,10 @@ async function main() {
     case 'prepare-claim':
       requireShared(values.community && values.request && values.label && values.recipient, 'arguments',
         '--community, --request, --label and --recipient are required');
+      requireShared(values['signing-margin'] && values['inclusion-margin'], 'arguments', 'explicit timing margins required');
       result = await prepareSharedClaim(options, { communityId: values.community as Hex, requestId: values.request as Hex,
-        label: values.label, recipient: getAddress(values.recipient) });
+        label: values.label, recipient: getAddress(values.recipient) }, {
+        signingMarginSeconds: Number(values['signing-margin']), inclusionMarginSeconds: Number(values['inclusion-margin']) });
       break;
     default: throw new Error('command must be verify, resolve, quote or prepare-claim');
   }

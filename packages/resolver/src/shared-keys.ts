@@ -8,13 +8,15 @@ export const SHARED_IDENTITY_DOMAINS = {
 } as const;
 
 export function requireCanonicalSharedLabel(label: string): void {
-  requireShared(typeof label === 'string' && /^[a-z0-9-]{1,63}$/.test(label)
+  requireShared(typeof label === 'string' && label.length >= 1 && label.length <= 63 && !/[^a-z0-9-]/.test(label)
     && !label.startsWith('-') && !label.endsWith('-') && label.slice(2, 4) !== '--',
   'label_invalid', 'expected canonical lowercase ASCII LDH, without the position-3/4 hyphen pair');
 }
 
 export function requireSharedKey(key: string): asserts key is Hex {
-  requireShared(/^0x[0-9a-f]{64}$/.test(key) && !/^0x0{64}$/.test(key), 'identity_invalid', 'expected canonical nonzero bytes32');
+  requireShared(typeof key === 'string' && key.length === 66 && key.startsWith('0x')
+    && !/[^0-9a-f]/.test(key.slice(2)) && key !== `0x${'0'.repeat(64)}`,
+  'identity_invalid', 'expected canonical nonzero bytes32');
 }
 
 export function sharedNamespaceIdFor(tld: string): Hex {
