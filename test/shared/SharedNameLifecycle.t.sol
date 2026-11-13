@@ -48,6 +48,7 @@ contract SharedNameLifecycleTest is SharedNameRegistryTestBase {
         assertEq(uint8(registry.status(id)), uint8(IShared.Status.Released));
         assertEq(registry.policy(ns).totalClaims, 1);
     }
+
     function testBoundariesAndFreshGenerationRecords() public {
         uint256 id = _issue("member001");
         vm.prank(holder);
@@ -114,7 +115,8 @@ contract SharedNameLifecycleTest is SharedNameRegistryTestBase {
         uint256 expiry = registry.expiresAt(id);
         uint256 elapsed = bound(offset, 0, 400 days);
         vm.warp(block.timestamp + elapsed);
-        IShared.Status expected = block.timestamp < expiry ? IShared.Status.Active
+        IShared.Status expected = block.timestamp < expiry
+            ? IShared.Status.Active
             : block.timestamp < expiry + 30 days ? IShared.Status.Grace : IShared.Status.Released;
         assertEq(uint8(registry.status(id)), uint8(expected));
     }

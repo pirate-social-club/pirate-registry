@@ -39,8 +39,9 @@ abstract contract SharedNameRegistryTestBase is Test {
     function _namespace(string memory tld, bool migration) internal returns (bytes32 id) {
         vm.startPrank(admin);
         id = registry.registerNamespace(tld, migration);
-        registry.attestNamespace(id, keccak256("fixture-hns-proof"), uint64(block.timestamp),
-            uint64(block.timestamp + 1 days), !migration);
+        registry.attestNamespace(
+            id, keccak256("fixture-hns-proof"), uint64(block.timestamp), uint64(block.timestamp + 1 days), !migration
+        );
         registry.configurePolicy(id, grantSigner, RENEWAL_PRICE, 100);
         registry.configureScope(id, COMMUNITY, submitter, 50, true);
         vm.stopPrank();
@@ -48,16 +49,28 @@ abstract contract SharedNameRegistryTestBase is Test {
 
     function _refresh(bytes32 id) internal {
         vm.prank(admin);
-        registry.attestNamespace(id, keccak256("fresh-fixture-proof"), uint64(block.timestamp),
-            uint64(block.timestamp + 1 days), true);
+        registry.attestNamespace(
+            id, keccak256("fresh-fixture-proof"), uint64(block.timestamp), uint64(block.timestamp + 1 days), true
+        );
     }
 
     function _claim(bytes32 id, string memory label) internal returns (IShared.FreeClaim memory c) {
         IShared.NameQuote memory q = registry.quote(id, COMMUNITY, label);
-        c = IShared.FreeClaim({requestId: bytes32(++requests), communityId: COMMUNITY, namespaceId: id,
-            label: label, recipient: holder, generation: q.generation, authorityRevision: q.authorityRevision,
-            policyRevision: q.policyRevision, scopeRevision: q.scopeRevision, issuedAt: uint64(block.timestamp),
-            deadline: uint64(block.timestamp + 600), years_: 1, maxCost: 0});
+        c = IShared.FreeClaim({
+            requestId: bytes32(++requests),
+            communityId: COMMUNITY,
+            namespaceId: id,
+            label: label,
+            recipient: holder,
+            generation: q.generation,
+            authorityRevision: q.authorityRevision,
+            policyRevision: q.policyRevision,
+            scopeRevision: q.scopeRevision,
+            issuedAt: uint64(block.timestamp),
+            deadline: uint64(block.timestamp + 600),
+            years_: 1,
+            maxCost: 0
+        });
     }
 
     function _signature(uint256 key, bytes32 digest) internal pure returns (bytes memory) {
@@ -77,5 +90,7 @@ abstract contract SharedNameRegistryTestBase is Test {
         return registry.claimFreeName(c, grant, consent);
     }
 
-    function _issue(string memory label) internal returns (uint256) { return _submit(_claim(ns, label)); }
+    function _issue(string memory label) internal returns (uint256) {
+        return _submit(_claim(ns, label));
+    }
 }

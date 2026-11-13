@@ -10,6 +10,7 @@ contract SharedNameRegistryTest is SharedNameRegistryTestBase {
         vm.expectRevert(IShared.UnsupportedChain.selector);
         new SharedNameRegistryV3(admin, address(token), treasury);
     }
+
     function testFreeFirstYearAndSeparateLockedRenewal() public {
         uint256 balance = token.balanceOf(holder);
         uint256 id = _issue("member001");

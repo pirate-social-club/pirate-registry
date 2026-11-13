@@ -10,6 +10,8 @@ import type { SharedNamingOptions } from './shared-names.ts';
 export async function reconcileSharedClaim(options: SharedNamingOptions, operation: PreparedSharedClaim,
   authorizeRecovery: (operation: PreparedSharedClaim) => Promise<void>, expectedTransactionHash?: Hex) {
   await authorizeRecovery(operation);
+  requireShared(operation.schema === 'pirate.member-name-claim/3',
+    'operation_version', 'unsupported prepared claim envelope; retain it for matching-version recovery');
   // Historical consumption survives loss of external delegation/issuance authority.
   const verified = await verifySharedSource(options);
   const { source, reader } = verified;
@@ -18,7 +20,7 @@ export async function reconcileSharedClaim(options: SharedNamingOptions, operati
   requireShared(operation.requestHash === hashTypedData(sharedClaimTypedData(operation.chainId, operation.registry, c))
     && operation.expectedTokenId === sharedTokenIdFor(nameKey, c.generation),
   'digest_mismatch', 'stored original operation was changed');
-  requireShared(operation.schema === 'pirate.member-name-claim/2' && operation.sourceSha256 === verified.sourceSha256
+  requireShared(operation.sourceSha256 === verified.sourceSha256
     && operation.chainId === source.chainId && getAddress(operation.registry) === source.registry
     && getAddress(operation.renewalToken) === source.constructor.paymentToken && c.namespaceId === sharedNamespaceIdFor(options.tld),
   'source_mismatch', 'recovery source differs');

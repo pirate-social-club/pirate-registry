@@ -121,11 +121,26 @@ from source for the release manifest (SPEC section 7).
 ## Protocol 3 corrective checkpoint
 
 The audit repair is source-only until allocated generation and verification.
-`docs/SHARED-NAMES-V3.md` revision 3 specifies nested recipient consent,
-observation-bound consumed receipts, explicit signing/inclusion margins and
+`docs/SHARED-NAMES-V3.md` revision 4 specifies nested recipient consent,
+observation-bound consumed receipts, separate collection/signing/inclusion budgets and
 durable journal ordering. Renewal sponsorship, locked prices, lifetime issuance
 counters and protocol-2 rights are unchanged. No live fee, role or gas policy is
 selected. Multisig provisioning and payment spending caps remain deferred.
+
+Prepared claims now use `pirate.member-name-claim/3` and expose inclusive
+`submitBy` in Unix seconds. The read-only CLI requires `--collection-margin`,
+`--signing-margin` and `--inclusion-margin`: positive integer seconds totaling
+at most 900. Preparation reserves all three budgets, submission reserves signing
+and inclusion, and broadcast reserves inclusion. These are explicit caller
+inputs, not live defaults. Older envelopes are refused, never silently upgraded
+or reissued. Retain their original journals for matching-version recovery.
+
+The journal helper requires POSIX durable storage and an exclusive caller lease.
+Failed file or directory sync can leave a journal; retain it. `EEXIST` never
+means persistence succeeded, even for identical bytes. The helper refuses retries
+at existing filenames and adds no replay protocol. Any separately admitted
+continuation must validate the original payload/raw/hash and re-sync the file
+and required directories before sending the same original transaction.
 
 Under Root's later allocation: build with the approved solc profile, run
 `npm run gen:shared-abi`, format the admitted Solidity files, then verify both
@@ -143,8 +158,13 @@ blocks; it never falls back to latest. The owning invocation is
 `npm run acceptance:shared -- --execute-local --tools APPROVED-TOOLS.json`.
 `--start-local` is restricted to an isolated CI runner. Tool JSON must specify
 absolute `forgePath`, `solcPath`, their approved SHA-256 byte pins and exact
-`solcVersion`. Local pins come from Root's verified preparation. CI records its
-installed tool provenance separately; that is not a local release acceptance.
+`solcVersion` in canonical `0.8.30+commit.<8 lowercase hex digits>` form. A copied
+platform suffix or newline is refused before rebuild scratch is allocated.
+Full binary version output is retained separately as provenance. Local pins come
+from Root's verified preparation. CI uses `--record-ci-tools` on the release
+verifier to select one executable across `~/.svm` and `~/.local/share/svm`, refusing
+missing or ambiguous installations, then pins its bytes for the archived rebuild.
+CI records installed tool provenance separately; that is not a local release acceptance.
 The release verifier requires `--tools` too and refuses ambient Git/Foundry/Solidity
 override variables. No dependency installation or runtime is authorized by this
 README alone.

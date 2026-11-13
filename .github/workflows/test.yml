@@ -91,18 +91,10 @@ jobs:
 
       - name: Record isolated CI tool provenance for shared rebuild
         run: |
-          python3 - <<'PY'
-          import hashlib, json, pathlib, re, shutil, subprocess
-          forge = pathlib.Path(shutil.which('forge')).resolve()
-          solc = pathlib.Path.home() / '.svm/0.8.30/solc-0.8.30'
-          version = re.search(r'Version: (0\.8\.30\+commit\.[0-9a-f]{8})', subprocess.check_output([str(solc), '--version'], text=True))
-          if version is None:
-              raise SystemExit('unexpected installed solc version')
-          output = pathlib.Path('.ignore/shared-names-registry-20261113/ci-tools.json')
-          output.parent.mkdir(parents=True, exist_ok=True)
-          output.write_text(json.dumps({'forgePath': str(forge), 'forgeSha256': hashlib.sha256(forge.read_bytes()).hexdigest(),
-              'solcPath': str(solc), 'solcSha256': hashlib.sha256(solc.read_bytes()).hexdigest(), 'solcVersion': version.group(1)}))
-          PY
+          mkdir -p .ignore/shared-names-registry-20261113
+          node scripts/verify-shared-release.ts \
+            --record-ci-tools .ignore/shared-names-registry-20261113/ci-tools.json \
+            --forge-path "$(command -v forge)" --svm-home "$HOME"
 
       - name: Shared local acceptance (fresh isolated services)
         run: npm run acceptance:shared -- --execute-local --start-local --tools .ignore/shared-names-registry-20261113/ci-tools.json

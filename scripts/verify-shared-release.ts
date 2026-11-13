@@ -1,6 +1,7 @@
 // Allocated execution only. No deployment, manifest write or public transaction.
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, lstatSync, realpathSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, lstatSync, realpathSync,
+  accessSync, constants as fsConstants, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -11,9 +12,10 @@ import { requireShared } from '../packages/resolver/src/shared-errors.ts';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const LIBRARIES = ['lib/forge-std', 'lib/openzeppelin-contracts', 'lib/openzeppelin-contracts-upgradeable'];
+const SOLC_VERSION = /^0\.8\.30\+commit\.[0-9a-f]{8}(?![\s\S])/;
 export interface SharedReleaseBuildTools {
   forgePath: string; forgeSha256: string; solcPath: string; solcSha256: string;
-  /** Exact long compiler version from the approved binary, never inferred. */
+  /** Canonical artifact version, without the binary's platform suffix. */
   solcVersion: string;
 }
 type Artifact = { abi: Abi; bytecode: { object: Hex }; deployedBytecode: {
@@ -26,12 +28,66 @@ export function requireSharedCompilerProfile(metadata: { compiler?: { version?: 
   metadata?: { bytecodeHash?: string; appendCBOR?: boolean } } }, exactVersion?: string): void {
   const settings = metadata.settings;
   requireShared(typeof metadata.compiler?.version === 'string'
-    && /^0\.8\.30\+[A-Za-z0-9.+-]+(?![\s\S])/.test(metadata.compiler.version)
-    && (exactVersion === undefined || metadata.compiler.version === exactVersion)
+    && SOLC_VERSION.test(metadata.compiler.version)
+    && (exactVersion === undefined || (SOLC_VERSION.test(exactVersion) && metadata.compiler.version === exactVersion))
     && settings?.evmVersion === 'cancun' && (settings.viaIR === undefined || settings.viaIR === false)
     && settings.optimizer?.enabled === true && settings.optimizer.runs === 200
     && settings.metadata?.bytecodeHash === 'none' && settings.metadata.appendCBOR === false,
   'release_compiler', 'rebuild compiler profile mismatch');
+}
+
+export function requireSharedSolcVersion(version: unknown): asserts version is string {
+  requireShared(typeof version === 'string' && SOLC_VERSION.test(version),
+    'release_tool', 'approved solcVersion must be exactly 0.8.30+commit.<8 lowercase hex digits>');
+}
+
+/** Parse a complete Version line; preserve the full output separately as provenance. */
+export function canonicalSharedSolcVersion(output: string, expected?: string): string {
+  if (expected !== undefined) requireSharedSolcVersion(expected);
+  const lines = output.split(/\r?\n/).filter(line => line.startsWith('Version:'));
+  requireShared(lines.length === 1, 'release_tool', 'expected exactly one solc Version line');
+  const match = /^Version: (0\.8\.30\+commit\.[0-9a-f]{8})(?:\.[A-Za-z0-9+-]+)*(?![\s\S])/.exec(lines[0]);
+  requireShared(match !== null && (expected === undefined || match[1] === expected),
+    'release_tool', 'binary canonical solc version differs from the approved version');
+  return match[1];
+}
+
+/** CI discovery only; local release verification always receives explicit approved pins. */
+export function findInstalledSharedSolc(home: string): string {
+  requireShared(isAbsolute(home), 'release_tool', 'explicit absolute SVM home required');
+  const candidates = [join(home, '.svm/0.8.30/solc-0.8.30'),
+    join(home, '.local/share/svm/0.8.30/solc-0.8.30')].filter(path => {
+    try { lstatSync(path); return true; }
+    catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return false;
+      throw error;
+    }
+  });
+  requireShared(candidates.length === 1, 'release_tool', 'expected exactly one installed solc; missing or ambiguous SVM locations');
+  const selected = realpathSync(candidates[0]);
+  requireShared(lstatSync(selected).isFile(), 'release_tool', 'installed solc is not a regular file');
+  accessSync(selected, fsConstants.X_OK);
+  return selected;
+}
+
+/** Records installed CI bytes; this is not approval of local release tools. */
+export function recordSharedCiToolProvenance(forgePath: string, home: string) {
+  const env = approvedReleaseEnvironment(ROOT);
+  requireShared(isAbsolute(forgePath), 'release_tool', 'absolute installed Forge path required');
+  const forge = realpathSync(forgePath);
+  const solc = findInstalledSharedSolc(home);
+  const sha256 = (path: string) => createHash('sha256').update(readFileSync(path)).digest('hex');
+  const forgeSha256 = sha256(forge), solcSha256 = sha256(solc);
+  const version = (path: string) => execFileSync(path, ['--version'], {
+    cwd: ROOT, env, encoding: 'utf8', maxBuffer: 64 * 1024, stdio: ['ignore', 'pipe', 'pipe'] });
+  const forgeVersionOutput = version(forge), solcVersionOutput = version(solc);
+  requireShared(forgeVersionOutput.split('\n')[0].trim() === 'forge Version: 1.9.0',
+    'release_tool', 'installed Forge 1.9.0 required');
+  const solcVersion = canonicalSharedSolcVersion(solcVersionOutput);
+  requireShared(sha256(forge) === forgeSha256 && sha256(solc) === solcSha256,
+    'release_tool', 'installed binary changed while recording provenance');
+  return { forgePath: forge, forgeSha256, solcPath: solc, solcSha256, solcVersion,
+    forgeVersionOutput, solcVersionOutput };
 }
 
 export function approvedReleaseEnvironment(home: string, inherited: NodeJS.ProcessEnv = process.env) {
@@ -74,12 +130,12 @@ function pinnedBinary(path: string, expected: string): string {
 export async function verifySharedRelease(sourceInput: SharedRegistrySource, rpcUrl: string,
   tools: SharedReleaseBuildTools) {
   const source = parseSharedRegistrySource(sourceInput);
+  // Reject a copied platform suffix/newline before any scratch or child execution.
+  requireSharedSolcVersion(tools.solcVersion);
   // Refuse overrides before allocating scratch or executing any child.
   approvedReleaseEnvironment(ROOT);
   const forge = pinnedBinary(tools.forgePath, tools.forgeSha256);
   const solc = pinnedBinary(tools.solcPath, tools.solcSha256);
-  requireShared(/^0\.8\.30\+[A-Za-z0-9.+-]+(?![\s\S])/.test(tools.solcVersion),
-    'release_tool', 'exact approved solc long version required');
   const scratchParent = join(ROOT, '.ignore/shared-names-registry-20261113/release-rebuilds');
   mkdirSync(scratchParent, { recursive: true });
   const scratch = mkdtempSync(join(scratchParent, 'rebuild-'));
@@ -92,10 +148,11 @@ export async function verifySharedRelease(sourceInput: SharedRegistrySource, rpc
   const git = (cwd: string, ...args: string[]) => run('/usr/bin/git', [
     '--no-replace-objects', '--no-optional-locks', '-c', 'core.hooksPath=/dev/null',
     '-c', 'core.fsmonitor=false', '-c', 'core.attributesFile=/dev/null', ...args], cwd);
-  requireShared(run(forge, ['--version']).toString().split('\n')[0].trim() === 'forge Version: 1.9.0',
+  const forgeVersionOutput = run(forge, ['--version']).toString();
+  const solcVersionOutput = run(solc, ['--version']).toString();
+  requireShared(forgeVersionOutput.split('\n')[0].trim() === 'forge Version: 1.9.0',
     'release_tool', 'approved Forge 1.9.0 required');
-  requireShared(run(solc, ['--version']).toString().includes(`Version: ${tools.solcVersion}`),
-    'release_tool', 'approved solc version differs');
+  canonicalSharedSolcVersion(solcVersionOutput, tools.solcVersion);
   const commit = git(ROOT, 'rev-parse', `${source.sourceCommit}^{commit}`).toString().trim();
   requireShared(commit === source.sourceCommit, 'release_source', 'commit does not resolve exactly');
 
@@ -199,7 +256,9 @@ export async function verifySharedRelease(sourceInput: SharedRegistrySource, rpc
     'release_reorg', 'deployment reorged during verification');
   await codeAt(head.hash);
   return { schema: 'pirate.shared-registry-release-proof/2', commit, submodules, abiSha256,
-    tools: { ...tools, forgePath: forge, solcPath: solc }, compilerSourceCount: Object.keys(metadata.sources).length,
+    tools: { ...tools, forgePath: forge, solcPath: solc },
+    toolVersionOutputs: { forge: forgeVersionOutput, solc: solcVersionOutput },
+    compilerSourceCount: Object.keys(metadata.sources).length,
     archivedInputCount: closure.size, archivedSourceClosureVerified: true,
     chainId: source.chainId, registry: source.registry, runtimeCodeHash: source.runtimeCodeHash,
     deploymentBlock: { number: block.number.toString(), hash: block.hash }, selectedBlock: head.hash,
@@ -208,10 +267,19 @@ export async function verifySharedRelease(sourceInput: SharedRegistrySource, rpc
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  const { values } = parseArgs({ options: { source: { type: 'string' }, rpc: { type: 'string' }, tools: { type: 'string' } } });
-  requireShared(values.source && values.rpc && values.tools, 'arguments', '--source, --rpc and --tools required');
-  verifySharedRelease(loadSharedRegistrySource(values.source), values.rpc,
-    JSON.parse(readFileSync(values.tools, 'utf8')) as SharedReleaseBuildTools)
-    .then(report => console.log(JSON.stringify(report, null, 2)))
-    .catch((error: unknown) => { console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1; });
+  const { values } = parseArgs({ options: { source: { type: 'string' }, rpc: { type: 'string' }, tools: { type: 'string' },
+    'record-ci-tools': { type: 'string' }, 'forge-path': { type: 'string' }, 'svm-home': { type: 'string' } } });
+  if (values['record-ci-tools']) {
+    requireShared(process.env.CI === 'true' && values['forge-path'] && values['svm-home']
+      && !values.source && !values.rpc && !values.tools, 'arguments', 'CI-only provenance requires --forge-path and --svm-home');
+    const proof = recordSharedCiToolProvenance(values['forge-path'], values['svm-home']);
+    writeFileSync(values['record-ci-tools'], JSON.stringify(proof, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
+  } else {
+    requireShared(values.source && values.rpc && values.tools && !values['forge-path'] && !values['svm-home'],
+      'arguments', '--source, --rpc and --tools required');
+    verifySharedRelease(loadSharedRegistrySource(values.source), values.rpc,
+      JSON.parse(readFileSync(values.tools, 'utf8')) as SharedReleaseBuildTools)
+      .then(report => console.log(JSON.stringify(report, null, 2)))
+      .catch((error: unknown) => { console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1; });
+  }
 }

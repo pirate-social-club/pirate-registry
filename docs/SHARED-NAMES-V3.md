@@ -1,7 +1,7 @@
 # Shared names protocol 3
 
 This is the normative source specification for `pirate.shared-names/3`, revision
-3, authored before its affected implementation. Compilation, generated ABI, test vectors,
+4, authored before its affected implementation. Compilation, generated ABI, test vectors,
 independent review and local acceptance are pending. It describes no deployed
 registry, admitted live namespace, fee selection or funded service. Protocol 2
 and its specification, deployments, manifests and locked terms remain unchanged.
@@ -164,23 +164,45 @@ a failed signature, cap, payment or receiver rolls the whole transaction back.
 SDK preparation verifies an explicit source and one canonical block, obtains
 the quote, and binds exact fields. Issued-at uses that block's timestamp so
 simulation at the same block is possible. Deadline is bounded by issued-at plus
-900 seconds and authority expiry. Callers explicitly provide positive signing
-and inclusion margins whose sum is below 900 seconds; preparation requires both
-remaining, and broadcast requires the inclusion margin after signing and durable
-persistence. An insufficient window has its own error and reports selected-block
-lag. No default operational gas or timing policy is selected. Chain 6343 safe
-lag must be measured before selecting those margins for a live service.
+900 seconds and authority expiry. Callers explicitly provide positive integer
+`collectionMarginSeconds`, `signingMarginSeconds` and `inclusionMarginSeconds`,
+whose sum is at most 900 seconds. Preparation requires all three budgets to
+remain after its final verification. Collection covers the issuer and recipient
+signatures; signing covers transaction signing and durable storage. Submission
+requires signing plus inclusion time, and broadcast requires inclusion time
+after signing and durable persistence. Boundaries are inclusive. Prepared
+operations expose `submitBy`, a Unix timestamp in seconds equal to deadline minus
+signing and inclusion budgets. Callers must begin submission no later than that
+time; it is a scheduling limit, not a promise of inclusion. An insufficient
+window has its own error and reports selected-block lag. No default operational
+gas or timing policy is selected. Chain 6343 safe lag must be measured before
+selecting those margins for a live service.
 
 A pending/unknown broadcast retains the original signed operation and transaction
 hash; it must not silently generate a new request or retry with a fresh nonce.
-Prepared operations use `pirate.member-name-claim/2`; the unaccepted earlier
-source shape is not silently upgraded or submitted with a different consent.
+Prepared operations use `pirate.member-name-claim/3`, with all three budgets and
+`submitBy`. Submission and recovery reject older envelope versions. Existing
+older journals must be retained for their matching version's recovery tooling;
+this release does not migrate them, allocate replacement requests or silently
+upgrade their shape. The on-chain issuer digest, nested consent, request ID,
+raw signed transaction and nonce identities are unchanged by the envelope version.
 Automatic nonce replacement/cancellation is not implemented; a later admitted
 caller must retain the original request and explicitly coordinate that operation.
 Persistence must fsync the file and its containing directory, including every
 newly created directory link, before permitting broadcast. Any persistence or
-sync failure prevents send. Durable storage and exclusive operation leases belong
-to the admitted caller; the local acceptance journal exercises the same boundary.
+sync failure prevents send. The supplied exclusive-create helper requires POSIX
+directory fsync and no-follow support on durable, caller-owned storage. A write
+or final directory-sync failure can leave a partial or complete journal. Retain
+it; `EEXIST`, even with identical bytes, never establishes durable success. The
+helper refuses every existing filename and offers no replay or repair operation.
+Any separately admitted continuation must hold the original operation lease,
+validate the exact original payload, signed raw bytes and transaction hash, and
+re-establish file and required directory synchronization before sending those
+same bytes. Failure to establish any of these facts must prevent send. Never
+overwrite or delete the failed journal, allocate another request or nonce, or
+treat a persistence failure as an unused entitlement. Durable storage and
+exclusive operation leases belong to the admitted caller; the local acceptance
+journal exercises the same boundary.
 
 Recovery rechecks application authorization and verifies the original pinned
 source/deployment, token namespace, permanent claimReceipt, complete original
@@ -281,6 +303,18 @@ It refuses ambient Git/Foundry/Solidity overrides, symlinks and unpinned source
 imports, checks artifact metadata source hashes against that archived closure,
 and rejects viaIR=true (false or absent is the accepted non-IR profile). No local
 untracked library content or external configuration participates in the rebuild.
+Approved `solcVersion` is exactly `0.8.30+commit.<8 lowercase hex digits>`, the
+canonical artifact version, without a platform suffix or whitespace. It is
+validated before allocating rebuild scratch. The verifier parses the canonical
+version from the actual binary's full `--version` output, compares it to the
+approved value and artifact metadata, and retains the full output as provenance.
+CI searches only the two supported installed locations below its explicit home:
+`.svm/0.8.30/solc-0.8.30` and
+`.local/share/svm/0.8.30/solc-0.8.30`. Missing, non-executable or multiple candidates
+are errors, including two entries pointing at the same binary. CI records the
+selected real path, exact binary SHA-256 and canonical version; the archived
+rebuild uses that exact pinned executable. This CI provenance is separate from
+Root's independently approved local tool pins.
 Prepared tests and source without compilation are explicitly unverified.
 
 ## Required acceptance

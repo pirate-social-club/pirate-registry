@@ -7,7 +7,11 @@ import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Recei
 
 contract SignatureOnlyRecipient {
     bytes32 public accepted;
-    function setAccepted(bytes32 value) external { accepted = value; }
+
+    function setAccepted(bytes32 value) external {
+        accepted = value;
+    }
+
     function isValidSignature(bytes32 value, bytes calldata) external view returns (bytes4) {
         return value == accepted ? bytes4(0x1626ba7e) : bytes4(0xffffffff);
     }
@@ -23,20 +27,27 @@ contract ProbingSharedRecipient is SignatureOnlyRecipient, IERC721Receiver {
     address private destination;
     IShared.FreeClaim private reentry;
     bytes private reentryGrant;
-    constructor(SharedNameRegistryV3 registry_) { registry = registry_; }
+
+    constructor(SharedNameRegistryV3 registry_) {
+        registry = registry_;
+    }
+
     function arm(IShared.FreeClaim calldata claim, bytes calldata grant, address transferTo) external {
         reentry = claim;
         reentryGrant = grant;
         destination = transferTo;
         armed = true;
     }
+
     function onERC721Received(address, address, uint256 id, bytes calldata) external returns (bytes4) {
         initialized = registry.effectiveOwner(id) == address(this) && registry.expiresAt(id) > block.timestamp;
-        try registry.renew(id, 1, 0, block.timestamp) {} catch (bytes memory reason) {
+        try registry.renew(id, 1, 0, block.timestamp) {}
+        catch (bytes memory reason) {
             renewalBlocked = bytes4(reason) == bytes4(keccak256("ReentrancyGuardReentrantCall()"));
         }
         if (armed) {
-            try registry.claimFreeName(reentry, reentryGrant, hex"01") {} catch (bytes memory reason) {
+            try registry.claimFreeName(reentry, reentryGrant, hex"01") {}
+            catch (bytes memory reason) {
                 claimReentryBlocked = bytes4(reason) == bytes4(keccak256("ReentrancyGuardReentrantCall()"));
             }
             registry.transferFrom(address(this), destination, id);
@@ -52,8 +63,19 @@ contract SharedNameClaimsTest is SharedNameRegistryTestBase {
         bytes32 key = registry.nameKeyFor(ns, c.label);
         uint256 id = registry.tokenIdFor(key, 1);
         vm.expectEmit(true, true, true, true, address(registry));
-        emit IShared.FreeNameClaimed(ns, COMMUNITY, c.requestId, registry.requestHash(c), key,
-            c.label, id, 1, holder, uint64(block.timestamp + 365 days), RENEWAL_PRICE);
+        emit IShared.FreeNameClaimed(
+            ns,
+            COMMUNITY,
+            c.requestId,
+            registry.requestHash(c),
+            key,
+            c.label,
+            id,
+            1,
+            holder,
+            uint64(block.timestamp + 365 days),
+            RENEWAL_PRICE
+        );
         assertEq(_submit(c), id);
     }
 
@@ -128,6 +150,7 @@ contract SharedNameClaimsTest is SharedNameRegistryTestBase {
         assertEq(registry.claimReceipt(COMMUNITY, c.requestId).requestHash, digest);
         assertEq(registry.policy(ns).totalClaims, 1);
     }
+
     function testReceiptAndReplayStayBoundToOriginalOperation() public {
         IShared.FreeClaim memory c = _claim(ns, "member001");
         uint256 id = _submit(c);

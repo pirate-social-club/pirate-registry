@@ -4,7 +4,32 @@ import { sharedNamespaceIdFor, sharedNameKeyFor, sharedTokenIdFor, requireCanoni
 import type { Hex } from 'viem';
 
 // BEGIN ALLOCATED IDENTITY VECTORS
-const literalVectors: readonly { tld: string; label: string; generation: string; namespaceId: Hex; nameKey: Hex; tokenId: string }[] = [];
+const literalVectors = [
+  {
+    "tld": "testtld",
+    "label": "member001",
+    "generation": "1",
+    "namespaceId": "0x171a7715833c41caa33d3304096ea3f330e94e2b58eac1b29fc2fee99dd14f3d",
+    "nameKey": "0x6d73822225a283039c5509f97306783e3479a0e37a5044f5cb52038f8b160856",
+    "tokenId": "95165702007452585980891729623512171902651103434603173062025220274514321273488"
+  },
+  {
+    "tld": "othertld",
+    "label": "member001",
+    "generation": "1",
+    "namespaceId": "0xad1ddae470c5a78c4606195fc22c2052fc09d7e2961c8be5d63c353df8bfad9f",
+    "nameKey": "0x17c1a7656712aeca2b7313821b02344431c180a32094aeb82e5984413fda1bb3",
+    "tokenId": "106965765079036890316365061902104356189341292721360854213475389451124177547303"
+  },
+  {
+    "tld": "testtld",
+    "label": "member001",
+    "generation": "2",
+    "namespaceId": "0x171a7715833c41caa33d3304096ea3f330e94e2b58eac1b29fc2fee99dd14f3d",
+    "nameKey": "0x6d73822225a283039c5509f97306783e3479a0e37a5044f5cb52038f8b160856",
+    "tokenId": "108434146224625834091005199361104751209326105825392306275063521700134099266268"
+  }
+] as const;
 // END ALLOCATED IDENTITY VECTORS
 
 test('independently generated literal vectors match all three identity helpers', () => {

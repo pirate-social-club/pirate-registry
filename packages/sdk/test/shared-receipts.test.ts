@@ -32,11 +32,11 @@ function fixture(t: TestContext) {
   const key = sharedNameKeyFor(claim.namespaceId, claim.label);
   const tokenId = sharedTokenIdFor(key, 1n);
   const expiry = 950n + 365n * 86400n;
-  const operation: PreparedSharedClaim = { schema: 'pirate.member-name-claim/2', sourceSha256: sharedSourceSha256(source),
+  const operation: PreparedSharedClaim = { schema: 'pirate.member-name-claim/3', sourceSha256: sharedSourceSha256(source),
     chainId: 31337, registry, claim, requestHash: hashTypedData(sharedClaimTypedData(31337, registry, claim)),
     expectedTokenId: tokenId, renewalToken: currency, annualRenewalPrice: 5n,
     quoteBlock: { number: 5n, hash: h('6'), timestamp: 900n },
-    timing: { signingMarginSeconds: 60, inclusionMarginSeconds: 60 } };
+    timing: { collectionMarginSeconds: 60, signingMarginSeconds: 60, inclusionMarginSeconds: 60 }, submitBy: 1380n };
   const event = getAbiItem({ abi: sharedRegistryAbi, name: 'FreeNameClaimed' });
   const logs = () => {
     const log = { address: state.wrongEmitter ? recipient : registry, blockHash: h('4'), blockNumber: 10n, transactionHash: h('7'),
@@ -85,6 +85,15 @@ function fixture(t: TestContext) {
   const authorize = async () => { assert.ok(state.recoveryAuthorized, 'recovery authorization revoked'); };
   return { state, operation, options, authorize, reader };
 }
+
+test('recovery retains obsolete envelopes and refuses silent version migration', async t => {
+  const f = fixture(t);
+  Reflect.set(f.operation, 'schema', 'pirate.member-name-claim/2');
+  const original = structuredClone(f.operation);
+  await assert.rejects(reconcileSharedClaim(f.options, f.operation, f.authorize), /operation_version/);
+  assert.deepEqual(f.operation, original);
+  assert.equal(f.state.claimBlockReads, 0);
+});
 
 test('original receipt proves consumption without HNS and absence remains pending', async t => {
   const f = fixture(t);

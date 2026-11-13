@@ -39,7 +39,10 @@ contract SharedNameRegistryV3 is ERC721, EIP712, ReentrancyGuardTransient, IShar
         uint256 annualRenewalPrice;
     }
 
-    struct NamePolicy { uint256 initialPrice; address reservedFor; }
+    struct NamePolicy {
+        uint256 initialPrice;
+        address reservedFor;
+    }
 
     address public admin;
     address public pendingAdmin;
@@ -62,9 +65,12 @@ contract SharedNameRegistryV3 is ERC721, EIP712, ReentrancyGuardTransient, IShar
     }
 
     constructor(address admin_, address paymentToken_, address treasury_)
-        ERC721("Pirate Shared Names", "PSN") EIP712("PirateSharedNames", "3")
+        ERC721("Pirate Shared Names", "PSN")
+        EIP712("PirateSharedNames", "3")
     {
-        if (block.chainid != 6343 && block.chainid != 31337) revert UnsupportedChain();
+        if (block.chainid != 6343 && block.chainid != 31337) {
+            revert UnsupportedChain();
+        }
         if (admin_ == address(0) || paymentToken_.code.length == 0) revert InvalidConfiguration();
         admin = admin_;
         paymentToken = paymentToken_;
@@ -85,7 +91,9 @@ contract SharedNameRegistryV3 is ERC721, EIP712, ReentrancyGuardTransient, IShar
     }
 
     function registerNamespace(string calldata tld, bool migrationRequired)
-        external onlyAdmin returns (bytes32 namespaceId)
+        external
+        onlyAdmin
+        returns (bytes32 namespaceId)
     {
         namespaceId = namespaceIdFor(tld);
         if (bytes(_authorities[namespaceId].tld).length != 0) revert InvalidConfiguration();
@@ -94,12 +102,19 @@ contract SharedNameRegistryV3 is ERC721, EIP712, ReentrancyGuardTransient, IShar
         emit NamespaceRegistered(namespaceId, tld, migrationRequired);
     }
 
-    function attestNamespace(bytes32 namespaceId, bytes32 evidenceHash, uint64 observedAt,
-        uint64 validUntil, bool issuanceEnabled) external onlyAdmin
-    {
+    function attestNamespace(
+        bytes32 namespaceId,
+        bytes32 evidenceHash,
+        uint64 observedAt,
+        uint64 validUntil,
+        bool issuanceEnabled
+    ) external onlyAdmin {
         Authority storage a = _authority(namespaceId);
-        if (evidenceHash == bytes32(0) || observedAt < a.observedAt || observedAt > block.timestamp || validUntil <= block.timestamp
-            || validUntil <= observedAt || uint256(validUntil) - observedAt > MAX_AUTHORITY_LIFETIME) {
+        if (
+            evidenceHash == bytes32(0) || observedAt < a.observedAt || observedAt > block.timestamp
+                || validUntil <= block.timestamp || validUntil <= observedAt
+                || uint256(validUntil) - observedAt > MAX_AUTHORITY_LIFETIME
+        ) {
             revert InvalidConfiguration();
         }
         if (issuanceEnabled && a.migrationRequired) revert MigrationRequired();
@@ -122,13 +137,18 @@ contract SharedNameRegistryV3 is ERC721, EIP712, ReentrancyGuardTransient, IShar
         _emitAuthority(namespaceId, a);
     }
 
-    function configurePolicy(bytes32 namespaceId, address grantSigner, uint256 annualRenewalPrice,
-        uint64 totalClaimLimit) external onlyAdmin
-    {
+    function configurePolicy(
+        bytes32 namespaceId,
+        address grantSigner,
+        uint256 annualRenewalPrice,
+        uint64 totalClaimLimit
+    ) external onlyAdmin {
         _authority(namespaceId);
         Policy storage p = _policies[namespaceId];
-        if (grantSigner == address(0) || totalClaimLimit == 0 || totalClaimLimit < p.totalClaims
-            || annualRenewalPrice > type(uint128).max) revert InvalidConfiguration();
+        if (
+            grantSigner == address(0) || totalClaimLimit == 0 || totalClaimLimit < p.totalClaims
+                || annualRenewalPrice > type(uint128).max
+        ) revert InvalidConfiguration();
         p.grantSigner = grantSigner;
         p.annualRenewalPrice = annualRenewalPrice;
         p.totalClaimLimit = totalClaimLimit;
@@ -137,14 +157,22 @@ contract SharedNameRegistryV3 is ERC721, EIP712, ReentrancyGuardTransient, IShar
         emit PolicyConfigured(namespaceId, grantSigner, annualRenewalPrice, totalClaimLimit, p.revision);
     }
 
-    function configureScope(bytes32 namespaceId, bytes32 communityId, address submitter,
-        uint64 totalClaimLimit, bool enabled) external onlyAdmin
-    {
+    function configureScope(
+        bytes32 namespaceId,
+        bytes32 communityId,
+        address submitter,
+        uint64 totalClaimLimit,
+        bool enabled
+    ) external onlyAdmin {
         _authority(namespaceId);
         Scope storage s = _scopes[namespaceId][communityId];
-        if (communityId == bytes32(0) || totalClaimLimit < s.totalClaims
-            || (enabled && (submitter == address(0) || totalClaimLimit == 0
-                || submitter == _policies[namespaceId].grantSigner))) revert InvalidConfiguration();
+        if (
+            communityId == bytes32(0) || totalClaimLimit < s.totalClaims
+                || (enabled
+                    && (submitter == address(0)
+                        || totalClaimLimit == 0
+                        || submitter == _policies[namespaceId].grantSigner))
+        ) revert InvalidConfiguration();
         s.submitter = submitter;
         s.totalClaimLimit = totalClaimLimit;
         s.enabled = enabled;
@@ -152,8 +180,9 @@ contract SharedNameRegistryV3 is ERC721, EIP712, ReentrancyGuardTransient, IShar
         emit ScopeConfigured(namespaceId, communityId, submitter, totalClaimLimit, s.revision, enabled);
     }
 
-    function setNamePolicy(bytes32 namespaceId, string calldata label, uint256 initialPrice,
-        address reservedFor) external onlyAdmin
+    function setNamePolicy(bytes32 namespaceId, string calldata label, uint256 initialPrice, address reservedFor)
+        external
+        onlyAdmin
     {
         _authority(namespaceId);
         bytes32 key = nameKeyFor(namespaceId, label);
@@ -177,7 +206,9 @@ contract SharedNameRegistryV3 is ERC721, EIP712, ReentrancyGuardTransient, IShar
     }
 
     function quote(bytes32 namespaceId, bytes32 communityId, string calldata label)
-        external view returns (NameQuote memory q)
+        external
+        view
+        returns (NameQuote memory q)
     {
         Authority storage a = _authority(namespaceId);
         Policy storage p = _policies[namespaceId];
@@ -195,10 +226,10 @@ contract SharedNameRegistryV3 is ERC721, EIP712, ReentrancyGuardTransient, IShar
         q.annualRenewalPrice = p.annualRenewalPrice;
         q.namespaceClaimsRemaining = p.totalClaimLimit - p.totalClaims;
         q.scopeClaimsRemaining = s.totalClaimLimit - s.totalClaims;
-        q.issuanceEnabled = a.issuanceEnabled && !a.migrationRequired && block.timestamp < a.validUntil
-            && p.configured && s.enabled && s.submitter != p.grantSigner && bytes(label).length >= 8
-            && q.initialPrice == 0 && q.namespaceClaimsRemaining != 0 && q.scopeClaimsRemaining != 0
-            && previous != type(uint64).max && (q.status == Status.Unknown || q.status == Status.Released);
+        q.issuanceEnabled = a.issuanceEnabled && !a.migrationRequired && block.timestamp < a.validUntil && p.configured
+            && s.enabled && s.submitter != p.grantSigner && bytes(label).length >= 8 && q.initialPrice == 0
+            && q.namespaceClaimsRemaining != 0 && q.scopeClaimsRemaining != 0 && previous != type(uint64).max
+            && (q.status == Status.Unknown || q.status == Status.Released);
     }
 
     function requestHash(FreeClaim calldata c) public view returns (bytes32) {
@@ -208,10 +239,19 @@ contract SharedNameRegistryV3 is ERC721, EIP712, ReentrancyGuardTransient, IShar
     function _claimStructHash(FreeClaim calldata c) private pure returns (bytes32) {
         // All concatenated words are static ABI words. This is exactly the
         // EIP-712 encoding and avoids an oversized compiler operand stack.
-        bytes memory identity = abi.encode(CLAIM_TYPEHASH, c.requestId, c.communityId, c.namespaceId,
-            keccak256(bytes(c.label)), c.recipient);
-        bytes memory terms = abi.encode(c.generation, c.authorityRevision, c.policyRevision, c.scopeRevision,
-            c.issuedAt, c.deadline, c.years_, c.maxCost);
+        bytes memory identity = abi.encode(
+            CLAIM_TYPEHASH, c.requestId, c.communityId, c.namespaceId, keccak256(bytes(c.label)), c.recipient
+        );
+        bytes memory terms = abi.encode(
+            c.generation,
+            c.authorityRevision,
+            c.policyRevision,
+            c.scopeRevision,
+            c.issuedAt,
+            c.deadline,
+            c.years_,
+            c.maxCost
+        );
         return keccak256(bytes.concat(identity, terms));
     }
 
@@ -220,7 +260,9 @@ contract SharedNameRegistryV3 is ERC721, EIP712, ReentrancyGuardTransient, IShar
     }
 
     function claimFreeName(FreeClaim calldata c, bytes calldata grantSignature, bytes calldata recipientSignature)
-        external nonReentrant returns (uint256 tokenId)
+        external
+        nonReentrant
+        returns (uint256 tokenId)
     {
         bytes32 digest = requestHash(c);
         ClaimReceipt storage oldReceipt = _receipts[c.communityId][c.requestId];
@@ -244,8 +286,8 @@ contract SharedNameRegistryV3 is ERC721, EIP712, ReentrancyGuardTransient, IShar
         s.totalClaims++;
         tokenId = tokenIdFor(key, c.generation);
         _generations[key] = c.generation;
-        _tokens[tokenId] = TokenState(c.namespaceId, key, c.generation, uint64(block.timestamp + YEAR),
-            p.annualRenewalPrice);
+        _tokens[tokenId] =
+            TokenState(c.namespaceId, key, c.generation, uint64(block.timestamp + YEAR), p.annualRenewalPrice);
         _labels[tokenId] = c.label;
         _receipts[c.communityId][c.requestId] = ClaimReceipt(digest, tokenId, uint64(block.number));
         if (previous != 0) _burn(tokenIdFor(key, previous));
@@ -253,9 +295,12 @@ contract SharedNameRegistryV3 is ERC721, EIP712, ReentrancyGuardTransient, IShar
         _safeMint(c.recipient, tokenId);
     }
 
-    function _validateClaim(FreeClaim calldata c, bytes32 digest, bytes calldata grantSignature,
-        bytes calldata recipientSignature) private view
-    {
+    function _validateClaim(
+        FreeClaim calldata c,
+        bytes32 digest,
+        bytes calldata grantSignature,
+        bytes calldata recipientSignature
+    ) private view {
         Authority storage a = _authority(c.namespaceId);
         Policy storage p = _policies[c.namespaceId];
         Scope storage s = _scopes[c.namespaceId][c.communityId];
@@ -267,14 +312,20 @@ contract SharedNameRegistryV3 is ERC721, EIP712, ReentrancyGuardTransient, IShar
         if (c.authorityRevision != a.revision || c.policyRevision != p.revision || c.scopeRevision != s.revision) {
             revert RevisionMismatch();
         }
-        if (c.requestId == bytes32(0) || c.communityId == bytes32(0) || c.recipient == address(0)
-            || c.years_ != 1 || c.maxCost != 0 || bytes(c.label).length < 8) revert InvalidClaim();
-        if (c.issuedAt > block.timestamp || c.deadline < block.timestamp || c.deadline < c.issuedAt
-            || uint256(c.deadline) - c.issuedAt > MAX_GRANT_LIFETIME) revert GrantExpired();
+        if (
+            c.requestId == bytes32(0) || c.communityId == bytes32(0) || c.recipient == address(0) || c.years_ != 1
+                || c.maxCost != 0 || bytes(c.label).length < 8
+        ) revert InvalidClaim();
+        if (
+            c.issuedAt > block.timestamp || c.deadline < block.timestamp || c.deadline < c.issuedAt
+                || uint256(c.deadline) - c.issuedAt > MAX_GRANT_LIFETIME
+        ) revert GrantExpired();
         // Validate canonical label before external signature callbacks.
         nameKeyFor(c.namespaceId, c.label);
-        if (!SignatureChecker.isValidSignatureNow(p.grantSigner, digest, grantSignature)
-            || !SignatureChecker.isValidSignatureNow(c.recipient, recipientAcceptanceHash(c), recipientSignature)) {
+        if (
+            !SignatureChecker.isValidSignatureNow(p.grantSigner, digest, grantSignature)
+                || !SignatureChecker.isValidSignatureNow(c.recipient, recipientAcceptanceHash(c), recipientSignature)
+        ) {
             revert InvalidSignature();
         }
     }
@@ -314,7 +365,9 @@ contract SharedNameRegistryV3 is ERC721, EIP712, ReentrancyGuardTransient, IShar
     }
 
     function currentToken(bytes32 namespaceId, string calldata label)
-        external view returns (uint256 tokenId, uint64 generation, Status status_)
+        external
+        view
+        returns (uint256 tokenId, uint64 generation, Status status_)
     {
         bytes32 key = nameKeyFor(namespaceId, label);
         generation = _generations[key];
@@ -323,20 +376,46 @@ contract SharedNameRegistryV3 is ERC721, EIP712, ReentrancyGuardTransient, IShar
         status_ = _status(tokenId);
     }
 
-    function status(uint256 tokenId) external view returns (Status) { return _status(tokenId); }
-    function namespaceOf(uint256 tokenId) external view returns (bytes32) { return _tokens[tokenId].namespaceId; }
-    function nameKeyOf(uint256 tokenId) external view returns (bytes32) { return _tokens[tokenId].nameKey; }
-    function generationOf(uint256 tokenId) external view returns (uint64) { return _tokens[tokenId].generation; }
-    function labelOf(uint256 tokenId) external view returns (string memory) { return _labels[tokenId]; }
-    function expiresAt(uint256 tokenId) external view returns (uint64) { return _tokens[tokenId].expiry; }
+    function status(uint256 tokenId) external view returns (Status) {
+        return _status(tokenId);
+    }
+
+    function namespaceOf(uint256 tokenId) external view returns (bytes32) {
+        return _tokens[tokenId].namespaceId;
+    }
+
+    function nameKeyOf(uint256 tokenId) external view returns (bytes32) {
+        return _tokens[tokenId].nameKey;
+    }
+
+    function generationOf(uint256 tokenId) external view returns (uint64) {
+        return _tokens[tokenId].generation;
+    }
+
+    function labelOf(uint256 tokenId) external view returns (string memory) {
+        return _labels[tokenId];
+    }
+
+    function expiresAt(uint256 tokenId) external view returns (uint64) {
+        return _tokens[tokenId].expiry;
+    }
+
     function lockedRenewalPrice(uint256 tokenId) external view returns (uint256) {
         return _tokens[tokenId].annualRenewalPrice;
     }
-    function record(uint256 tokenId, bytes32 key) external view returns (bytes memory) { return _records[tokenId][key]; }
-    function recordManager(uint256 tokenId) external view returns (address) { return _managers[tokenId]; }
+
+    function record(uint256 tokenId, bytes32 key) external view returns (bytes memory) {
+        return _records[tokenId][key];
+    }
+
+    function recordManager(uint256 tokenId) external view returns (address) {
+        return _managers[tokenId];
+    }
+
     function effectiveOwner(uint256 tokenId) external view returns (address) {
         return _status(tokenId) == Status.Active ? _ownerOf(tokenId) : address(0);
     }
+
     function registrant(uint256 tokenId) external view returns (address) {
         Status s = _status(tokenId);
         return s == Status.Active || s == Status.Grace ? _ownerOf(tokenId) : address(0);
@@ -356,7 +435,9 @@ contract SharedNameRegistryV3 is ERC721, EIP712, ReentrancyGuardTransient, IShar
         emit AdminTransferred(old, msg.sender);
     }
 
-    function setTreasury(address treasury_) external onlyAdmin { _setTreasury(treasury_); }
+    function setTreasury(address treasury_) external onlyAdmin {
+        _setTreasury(treasury_);
+    }
 
     function sweep() external nonReentrant {
         uint256 amount = IERC20(paymentToken).balanceOf(address(this));
@@ -391,8 +472,19 @@ contract SharedNameRegistryV3 is ERC721, EIP712, ReentrancyGuardTransient, IShar
 
     function _emitClaim(FreeClaim calldata c, bytes32 digest, bytes32 key, uint256 tokenId) private {
         TokenState storage t = _tokens[tokenId];
-        emit FreeNameClaimed(c.namespaceId, c.communityId, c.requestId, digest, key, c.label, tokenId,
-            c.generation, c.recipient, t.expiry, t.annualRenewalPrice);
+        emit FreeNameClaimed(
+            c.namespaceId,
+            c.communityId,
+            c.requestId,
+            digest,
+            key,
+            c.label,
+            tokenId,
+            c.generation,
+            c.recipient,
+            t.expiry,
+            t.annualRenewalPrice
+        );
     }
 
     function _update(address to, uint256 tokenId, address auth) internal override returns (address) {

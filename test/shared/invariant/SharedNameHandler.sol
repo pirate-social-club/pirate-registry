@@ -24,10 +24,22 @@ contract SharedNameHandler is Test {
     mapping(uint256 => uint64) public expectedExpiry;
     uint256[] public tokens;
 
-    constructor(SharedNameRegistryV3 registry_, bytes32 ns, bytes32 community, address submitter_, address admin_,
-        uint256 grantKey_, uint256 holderKey_) {
-        registry = registry_; namespaceId = ns; communityId = community; submitter = submitter_;
-        admin = admin_; grantKey = grantKey_; holderKey = holderKey_;
+    constructor(
+        SharedNameRegistryV3 registry_,
+        bytes32 ns,
+        bytes32 community,
+        address submitter_,
+        address admin_,
+        uint256 grantKey_,
+        uint256 holderKey_
+    ) {
+        registry = registry_;
+        namespaceId = ns;
+        communityId = community;
+        submitter = submitter_;
+        admin = admin_;
+        grantKey = grantKey_;
+        holderKey = holderKey_;
     }
 
     function issue(uint8 suffix) external {
@@ -39,20 +51,37 @@ contract SharedNameHandler is Test {
         IShared.Authority memory a = registry.authority(namespaceId);
         if (block.timestamp >= a.validUntil) {
             vm.prank(admin);
-            registry.attestNamespace(namespaceId, keccak256("invariant-fresh-evidence"), uint64(block.timestamp),
-                uint64(block.timestamp + 1 days), true);
+            registry.attestNamespace(
+                namespaceId,
+                keccak256("invariant-fresh-evidence"),
+                uint64(block.timestamp),
+                uint64(block.timestamp + 1 days),
+                true
+            );
         }
         IShared.NameQuote memory q = registry.quote(namespaceId, communityId, label);
-        IShared.FreeClaim memory c = IShared.FreeClaim({requestId: bytes32(attempts), communityId: communityId,
-            namespaceId: namespaceId, label: label, recipient: vm.addr(holderKey), generation: q.generation,
-            authorityRevision: q.authorityRevision, policyRevision: q.policyRevision, scopeRevision: q.scopeRevision,
-            issuedAt: uint64(block.timestamp), deadline: uint64(block.timestamp + 600), years_: 1, maxCost: 0});
+        IShared.FreeClaim memory c = IShared.FreeClaim({
+            requestId: bytes32(attempts),
+            communityId: communityId,
+            namespaceId: namespaceId,
+            label: label,
+            recipient: vm.addr(holderKey),
+            generation: q.generation,
+            authorityRevision: q.authorityRevision,
+            policyRevision: q.policyRevision,
+            scopeRevision: q.scopeRevision,
+            issuedAt: uint64(block.timestamp),
+            deadline: uint64(block.timestamp + 600),
+            years_: 1,
+            maxCost: 0
+        });
         bytes32 digest = registry.requestHash(c);
         bytes memory grant = _sign(grantKey, digest);
         bytes memory consent = _sign(holderKey, registry.recipientAcceptanceHash(c));
         vm.prank(submitter);
         try registry.claimFreeName(c, grant, consent) returns (uint256 id) {
-            successfulClaims++; tokens.push(id);
+            successfulClaims++;
+            tokens.push(id);
             expectedHolder[id] = c.recipient;
             expectedExpiry[id] = registry.expiresAt(id);
             if (c.generation > 1) reregistrations++;
@@ -107,10 +136,14 @@ contract SharedNameHandler is Test {
         if (tokens.length == 0) return;
         uint256 id = tokens[seed % tokens.length];
         vm.prank(submitter);
-        try registry.setRecord(id, bytes32(uint256(1)), hex"01") { unauthorizedMutation = true; } catch {}
+        try registry.setRecord(id, bytes32(uint256(1)), hex"01") {
+            unauthorizedMutation = true;
+        } catch {}
     }
 
-    function tokenCount() external view returns (uint256) { return tokens.length; }
+    function tokenCount() external view returns (uint256) {
+        return tokens.length;
+    }
 
     function _sign(uint256 key, bytes32 digest) private pure returns (bytes memory) {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(key, digest);

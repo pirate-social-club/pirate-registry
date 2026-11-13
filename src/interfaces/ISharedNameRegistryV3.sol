@@ -3,7 +3,13 @@ pragma solidity 0.8.30;
 
 /// @notice Normative core interface; generated implementation ABI also includes ERC-721.
 interface ISharedNameRegistryV3 {
-    enum Status { Unknown, Active, Grace, Released, Superseded }
+    enum Status {
+        Unknown,
+        Active,
+        Grace,
+        Released,
+        Superseded
+    }
 
     struct Authority {
         string tld;
@@ -70,17 +76,50 @@ interface ISharedNameRegistryV3 {
     }
 
     event NamespaceRegistered(bytes32 indexed namespaceId, string tld, bool migrationRequired);
-    event AuthorityAttested(bytes32 indexed namespaceId, bytes32 evidenceHash, uint64 observedAt,
-        uint64 validUntil, uint64 revision, bool issuanceEnabled);
-    event PolicyConfigured(bytes32 indexed namespaceId, address grantSigner, uint256 annualRenewalPrice,
-        uint64 totalClaimLimit, uint64 revision);
-    event ScopeConfigured(bytes32 indexed namespaceId, bytes32 indexed communityId, address submitter,
-        uint64 totalClaimLimit, uint64 revision, bool enabled);
-    event NamePolicySet(bytes32 indexed namespaceId, bytes32 indexed nameKey, string label,
-        uint256 initialPrice, address reservedFor, uint64 policyRevision);
-    event FreeNameClaimed(bytes32 indexed namespaceId, bytes32 indexed communityId, bytes32 indexed requestId,
-        bytes32 requestHash, bytes32 nameKey, string label, uint256 tokenId, uint64 generation,
-        address recipient, uint64 expiry, uint256 annualRenewalPrice);
+    event AuthorityAttested(
+        bytes32 indexed namespaceId,
+        bytes32 evidenceHash,
+        uint64 observedAt,
+        uint64 validUntil,
+        uint64 revision,
+        bool issuanceEnabled
+    );
+    event PolicyConfigured(
+        bytes32 indexed namespaceId,
+        address grantSigner,
+        uint256 annualRenewalPrice,
+        uint64 totalClaimLimit,
+        uint64 revision
+    );
+    event ScopeConfigured(
+        bytes32 indexed namespaceId,
+        bytes32 indexed communityId,
+        address submitter,
+        uint64 totalClaimLimit,
+        uint64 revision,
+        bool enabled
+    );
+    event NamePolicySet(
+        bytes32 indexed namespaceId,
+        bytes32 indexed nameKey,
+        string label,
+        uint256 initialPrice,
+        address reservedFor,
+        uint64 policyRevision
+    );
+    event FreeNameClaimed(
+        bytes32 indexed namespaceId,
+        bytes32 indexed communityId,
+        bytes32 indexed requestId,
+        bytes32 requestHash,
+        bytes32 nameKey,
+        string label,
+        uint256 tokenId,
+        uint64 generation,
+        address recipient,
+        uint64 expiry,
+        uint256 annualRenewalPrice
+    );
     event Renewed(uint256 indexed tokenId, uint64 expiry, address indexed payer, uint256 cost);
     event RecordSet(uint256 indexed tokenId, bytes32 indexed key, bytes value);
     event RecordManagerSet(uint256 indexed tokenId, address indexed manager);
@@ -118,27 +157,46 @@ interface ISharedNameRegistryV3 {
     function nameKeyFor(bytes32 namespaceId, string memory label) external pure returns (bytes32);
     function tokenIdFor(bytes32 nameKey, uint64 generation) external pure returns (uint256);
     function registerNamespace(string calldata tld, bool migrationRequired) external returns (bytes32);
-    function attestNamespace(bytes32 namespaceId, bytes32 evidenceHash, uint64 observedAt,
-        uint64 validUntil, bool issuanceEnabled) external;
+    function attestNamespace(
+        bytes32 namespaceId,
+        bytes32 evidenceHash,
+        uint64 observedAt,
+        uint64 validUntil,
+        bool issuanceEnabled
+    ) external;
     function setNamespaceIssuance(bytes32 namespaceId, bool enabled) external;
-    function configurePolicy(bytes32 namespaceId, address grantSigner, uint256 annualRenewalPrice,
-        uint64 totalClaimLimit) external;
-    function configureScope(bytes32 namespaceId, bytes32 communityId, address submitter,
-        uint64 totalClaimLimit, bool enabled) external;
-    function setNamePolicy(bytes32 namespaceId, string calldata label, uint256 initialPrice,
-        address reservedFor) external;
+    function configurePolicy(
+        bytes32 namespaceId,
+        address grantSigner,
+        uint256 annualRenewalPrice,
+        uint64 totalClaimLimit
+    ) external;
+    function configureScope(
+        bytes32 namespaceId,
+        bytes32 communityId,
+        address submitter,
+        uint64 totalClaimLimit,
+        bool enabled
+    ) external;
+    function setNamePolicy(bytes32 namespaceId, string calldata label, uint256 initialPrice, address reservedFor)
+        external;
     function authority(bytes32 namespaceId) external view returns (Authority memory);
     function policy(bytes32 namespaceId) external view returns (Policy memory);
     function scope(bytes32 namespaceId, bytes32 communityId) external view returns (Scope memory);
     function quote(bytes32 namespaceId, bytes32 communityId, string calldata label)
-        external view returns (NameQuote memory);
+        external
+        view
+        returns (NameQuote memory);
     function requestHash(FreeClaim calldata claim) external view returns (bytes32);
     function recipientAcceptanceHash(FreeClaim calldata claim) external view returns (bytes32);
-    function claimFreeName(FreeClaim calldata claim, bytes calldata grantSignature,
-        bytes calldata recipientSignature) external returns (uint256);
+    function claimFreeName(FreeClaim calldata claim, bytes calldata grantSignature, bytes calldata recipientSignature)
+        external
+        returns (uint256);
     function claimReceipt(bytes32 communityId, bytes32 requestId) external view returns (ClaimReceipt memory);
     function currentToken(bytes32 namespaceId, string calldata label)
-        external view returns (uint256 tokenId, uint64 generation, Status status_);
+        external
+        view
+        returns (uint256 tokenId, uint64 generation, Status status_);
     function status(uint256 tokenId) external view returns (Status);
     function namespaceOf(uint256 tokenId) external view returns (bytes32);
     function nameKeyOf(uint256 tokenId) external view returns (bytes32);

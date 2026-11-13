@@ -2,8 +2,13 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { parseSharedRegistrySource } from '../src/shared-manifest.ts';
 import { getAddress, keccak256 } from 'viem';
-import { readFileSync } from 'node:fs';
-import { approvedReleaseEnvironment, verifyArchivedSourceClosure, requireSharedCompilerProfile } from '../../../scripts/verify-shared-release.ts';
+import { readFileSync, mkdirSync, writeFileSync, realpathSync, existsSync, readdirSync, symlinkSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { randomUUID } from 'node:crypto';
+import { approvedReleaseEnvironment, verifyArchivedSourceClosure, requireSharedCompilerProfile,
+  requireSharedSolcVersion, canonicalSharedSolcVersion, findInstalledSharedSolc,
+  verifySharedRelease } from '../../../scripts/verify-shared-release.ts';
 
 const fixture = () => ({ schema: 'pirate.shared-registry-source/1', protocolVersion: 3,
   sourceCommit: '1'.repeat(40), abiSha256: '2'.repeat(64), chainId: 31337,
@@ -71,8 +76,8 @@ test('compiler closure rejects external, untracked, redirected and changed sourc
 });
 
 test('compiler profile accepts explicit or omitted non-IR and rejects changed build settings', () => {
-  // Profile-only fixture version, not a claimed compiler binary pin.
-  const compiler = { version: '0.8.30+fixture' };
+  // Format fixture only; no tool bytes or execution are attested by this test.
+  const compiler = { version: '0.8.30+commit.73712a01' };
   const settings = { evmVersion: 'cancun', optimizer: { enabled: true, runs: 200 },
     metadata: { bytecodeHash: 'none', appendCBOR: false } };
   requireSharedCompilerProfile({ compiler, settings }, compiler.version);
@@ -81,8 +86,97 @@ test('compiler profile accepts explicit or omitted non-IR and rejects changed bu
     { ...settings, optimizer: { enabled: true, runs: 201 } }, { ...settings, metadata: { bytecodeHash: 'ipfs', appendCBOR: true } }]) {
     assert.throws(() => requireSharedCompilerProfile({ compiler, settings: changed }), /release_compiler/);
   }
-  assert.throws(() => requireSharedCompilerProfile({ compiler, settings }, '0.8.30+different'), /release_compiler/);
-  assert.throws(() => requireSharedCompilerProfile({ compiler: { version: '0.8.30+fixture\n' }, settings }), /release_compiler/);
+  assert.throws(() => requireSharedCompilerProfile({ compiler, settings }, '0.8.30+commit.00000000'), /release_compiler/);
+  for (const suffix of ['.Linux.g++', '\n', '\r\n', '\u2028', '\u2029']) {
+    assert.throws(() => requireSharedCompilerProfile({ compiler: { version: compiler.version + suffix }, settings }), /release_compiler/);
+    assert.throws(() => requireSharedCompilerProfile({ compiler, settings }, compiler.version + suffix), /release_compiler/);
+  }
+});
+
+test('approved compiler version refuses noncanonical input', () => {
+  const version = '0.8.30+commit.73712a01';
+  requireSharedSolcVersion(version);
+  for (const value of [undefined, null, 30, '0.8.30', '0.8.30+fixture', '0.8.30+commit.73712A01',
+    '0.8.30+commit.73712a010', '0.8.30+commit.73712a0', ...['.Linux.g++', '\n', '\r\n', '\u2028', '\u2029', ' '].map(suffix => version + suffix)]) {
+    assert.throws(() => requireSharedSolcVersion(value), /release_tool/);
+  }
+});
+
+test('release verification rejects platform-suffixed approval before scratch or tool access', async () => {
+  const scratch = fileURLToPath(new URL('../../../.ignore/shared-names-registry-20261113/release-rebuilds', import.meta.url));
+  const inventory = () => existsSync(scratch) ? readdirSync(scratch).sort() : null;
+  const before = inventory();
+  for (const suffix of ['.Linux.g++', '\n', '\r\n']) {
+    await assert.rejects(verifySharedRelease(parseSharedRegistrySource(fixture()), 'http://127.0.0.1:1', {
+      forgePath: '/not-a-tool/forge', forgeSha256: '0'.repeat(64), solcPath: '/not-a-tool/solc',
+      solcSha256: '0'.repeat(64), solcVersion: '0.8.30+commit.73712a01' + suffix,
+    }), /approved solcVersion must be exactly/);
+  }
+  assert.deepEqual(inventory(), before);
+});
+
+test('full compiler version output is compared by exact canonical commit', () => {
+  const version = '0.8.30+commit.73712a01';
+  const output = `solc, the solidity compiler commandline interface\nVersion: ${version}.Linux.g++\n`;
+  assert.equal(canonicalSharedSolcVersion(output, version), version);
+  assert.equal(canonicalSharedSolcVersion(output.replaceAll('\n', '\r\n'), version), version);
+  assert.equal(canonicalSharedSolcVersion(`Version: ${version}\n`), version);
+  assert.throws(() => canonicalSharedSolcVersion(output, '0.8.30+commit.00000000'), /release_tool/);
+  assert.throws(() => canonicalSharedSolcVersion(output, version + '.Linux.g++'), /release_tool/);
+  for (const malformed of ['Version: 0.8.31+commit.73712a01.Linux.g++\n',
+    `Version: ${version}0.Linux.g++\n`, `Version: ${version} .Linux.g++\n`,
+    `Version: ${version}.Linux.g++\u2028`, output + `Version: ${version}\n`, 'no version']) {
+    assert.throws(() => canonicalSharedSolcVersion(malformed), /release_tool/);
+  }
+});
+
+function compilerHome() {
+  const home = join(fileURLToPath(new URL('../../../', import.meta.url)),
+    '.ignore/shared-names-registry-20261113', 'compiler-discovery-' + randomUUID());
+  mkdirSync(home, { recursive: true, mode: 0o700 });
+  return home;
+}
+
+function installedFixture(home: string, location: '.svm' | '.local/share/svm', mode = 0o700) {
+  const path = join(home, location, '0.8.30/solc-0.8.30');
+  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
+  // Discovery checks bytes only as a file; this fixture is never executed.
+  writeFileSync(path, 'discovery fixture, not a compiler\n', { flag: 'wx', mode });
+  return path;
+}
+
+test('compiler lookup selects the sole executable in the legacy SVM location', () => {
+  const home = compilerHome();
+  const expected = installedFixture(home, '.svm');
+  assert.equal(findInstalledSharedSolc(home), realpathSync(expected));
+});
+
+test('compiler lookup selects the sole executable in the XDG SVM location', () => {
+  const home = compilerHome();
+  const expected = installedFixture(home, '.local/share/svm');
+  assert.equal(findInstalledSharedSolc(home), realpathSync(expected));
+});
+
+test('compiler lookup refuses missing, ambiguous, non-executable and non-file candidates', () => {
+  const missing = compilerHome();
+  assert.throws(() => findInstalledSharedSolc(missing), /release_tool/);
+  assert.throws(() => findInstalledSharedSolc('relative-home'), /release_tool/);
+  const ambiguous = compilerHome();
+  installedFixture(ambiguous, '.svm');
+  installedFixture(ambiguous, '.local/share/svm');
+  assert.throws(() => findInstalledSharedSolc(ambiguous), /release_tool/);
+  const aliases = compilerHome();
+  const original = installedFixture(aliases, '.svm');
+  const alias = join(aliases, '.local/share/svm/0.8.30/solc-0.8.30');
+  mkdirSync(dirname(alias), { recursive: true });
+  symlinkSync(original, alias);
+  assert.throws(() => findInstalledSharedSolc(aliases), /release_tool/);
+  const noExec = compilerHome();
+  installedFixture(noExec, '.svm', 0o600);
+  assert.throws(() => findInstalledSharedSolc(noExec), /EACCES/);
+  const directory = compilerHome();
+  mkdirSync(join(directory, '.svm/0.8.30/solc-0.8.30'), { recursive: true });
+  assert.throws(() => findInstalledSharedSolc(directory), /release_tool/);
 });
 
 test('source profile refuses unknown fields, missing pins, v2, mainnet and altered compiler settings', () => {

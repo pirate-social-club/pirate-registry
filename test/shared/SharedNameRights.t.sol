@@ -23,6 +23,7 @@ contract SharedNameRightsTest is SharedNameRegistryTestBase {
         vm.stopPrank();
         assertEq(registry.record(id, key).length, 1024);
     }
+
     function testAdminAndSubmitterCannotSeizeOrEdit() public {
         uint256 id = _issue("member001");
         vm.prank(admin);

@@ -126,9 +126,12 @@ async function main() {
   await settle();
   let localClock = Number((await publicClient.getBlock()).timestamp);
   const options = { source, expectedSourceSha256: sharedSourceSha256(source), rpcUrl: RPC, handshake, tld, now: () => localClock };
-  const timing = { signingMarginSeconds: 60, inclusionMarginSeconds: 60 }; // Disposable fixture policy only.
+  const timing = { collectionMarginSeconds: 60, signingMarginSeconds: 60, inclusionMarginSeconds: 60 }; // Fixture only.
   const operation = await prepareSharedClaim(options, { requestId: keccak256(stringToHex(`request-${suffix}`)),
     communityId, label: 'member001', recipient: member.address }, timing);
+  assert.equal(operation.schema, 'pirate.member-name-claim/3');
+  assert.equal(operation.submitBy, operation.claim.deadline - BigInt(timing.signingMarginSeconds + timing.inclusionMarginSeconds));
+  assert.ok(operation.submitBy - BigInt(localClock) >= BigInt(timing.collectionMarginSeconds));
   writeFileSync(`${run}/original-operation.json`, `${json(operation)}\n`, { flag: 'wx' });
   const grantSignature = await issuer.signTypedData(sharedClaimTypedData(31337, registry, operation.claim));
   assert.equal(await publicClient.readContract({ address: registry, abi: sharedRegistryAbi,

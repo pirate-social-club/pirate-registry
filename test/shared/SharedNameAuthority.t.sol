@@ -33,8 +33,12 @@ contract SharedNameAuthorityTest is SharedNameRegistryTestBase {
         emit IShared.NamespaceRegistered(other, "newnamespace", false);
         registry.registerNamespace("newnamespace", false);
         vm.expectEmit(true, false, false, true, address(registry));
-        emit IShared.AuthorityAttested(other, bytes32(uint256(9)), uint64(block.timestamp), uint64(block.timestamp + 100), 1, true);
-        registry.attestNamespace(other, bytes32(uint256(9)), uint64(block.timestamp), uint64(block.timestamp + 100), true);
+        emit IShared.AuthorityAttested(
+            other, bytes32(uint256(9)), uint64(block.timestamp), uint64(block.timestamp + 100), 1, true
+        );
+        registry.attestNamespace(
+            other, bytes32(uint256(9)), uint64(block.timestamp), uint64(block.timestamp + 100), true
+        );
         vm.expectEmit(true, false, false, true, address(registry));
         emit IShared.PolicyConfigured(other, grantSigner, RENEWAL_PRICE, 10, 1);
         registry.configurePolicy(other, grantSigner, RENEWAL_PRICE, 10);
@@ -46,9 +50,13 @@ contract SharedNameAuthorityTest is SharedNameRegistryTestBase {
         emit IShared.NamePolicySet(other, nameKey, "member001", 1, holder, 2);
         registry.setNamePolicy(other, "member001", 1, holder);
         vm.expectRevert(IShared.InvalidConfiguration.selector);
-        registry.attestNamespace(other, bytes32(uint256(10)), uint64(block.timestamp - 1), uint64(block.timestamp + 100), true);
+        registry.attestNamespace(
+            other, bytes32(uint256(10)), uint64(block.timestamp - 1), uint64(block.timestamp + 100), true
+        );
         // Equal-time corrected evidence remains possible and advances revision.
-        registry.attestNamespace(other, bytes32(uint256(10)), uint64(block.timestamp), uint64(block.timestamp + 100), true);
+        registry.attestNamespace(
+            other, bytes32(uint256(10)), uint64(block.timestamp), uint64(block.timestamp + 100), true
+        );
         assertEq(registry.authority(other).revision, 2);
         vm.expectEmit(true, false, false, true, address(registry));
         emit IShared.TreasuryChanged(stranger);
@@ -81,6 +89,7 @@ contract SharedNameAuthorityTest is SharedNameRegistryTestBase {
         assertEq(registry.admin(), admin);
         assertEq(registry.pendingAdmin(), address(0));
     }
+
     function testExpiredAuthorityAndMigrationStayClosed() public {
         bytes32 migrating = _namespace("migrating", true);
         vm.prank(admin);
@@ -106,9 +115,13 @@ contract SharedNameAuthorityTest is SharedNameRegistryTestBase {
     function testRejectLongOrFutureEvidence() public {
         vm.startPrank(admin);
         vm.expectRevert(IShared.InvalidConfiguration.selector);
-        registry.attestNamespace(ns, bytes32(uint256(1)), uint64(block.timestamp + 1), uint64(block.timestamp + 100), true);
+        registry.attestNamespace(
+            ns, bytes32(uint256(1)), uint64(block.timestamp + 1), uint64(block.timestamp + 100), true
+        );
         vm.expectRevert(IShared.InvalidConfiguration.selector);
-        registry.attestNamespace(ns, bytes32(uint256(1)), uint64(block.timestamp), uint64(block.timestamp + 1 days + 1), true);
+        registry.attestNamespace(
+            ns, bytes32(uint256(1)), uint64(block.timestamp), uint64(block.timestamp + 1 days + 1), true
+        );
         vm.stopPrank();
     }
 

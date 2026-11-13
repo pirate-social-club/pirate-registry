@@ -9,7 +9,7 @@ import { isAbsolute, join } from 'node:path';
 
 export type SharedFreeClaim = ContractFunctionArgs<typeof sharedRegistryAbi, 'nonpayable', 'claimFreeName'>[0];
 export interface PreparedSharedClaim {
-  schema: 'pirate.member-name-claim/2';
+  schema: 'pirate.member-name-claim/3';
   sourceSha256: string;
   chainId: number;
   registry: Address;
@@ -20,29 +20,49 @@ export interface PreparedSharedClaim {
   annualRenewalPrice: bigint;
   quoteBlock: { number: bigint; hash: Hex; timestamp: bigint };
   timing: SharedClaimTiming;
+  /** Inclusive Unix-second limit for beginning submission with collected consent. */
+  submitBy: bigint;
 }
 
 /** Explicit service policy; no live timing defaults are selected by this SDK. */
-export interface SharedClaimTiming { signingMarginSeconds: number; inclusionMarginSeconds: number }
+export interface SharedClaimTiming {
+  collectionMarginSeconds: number;
+  signingMarginSeconds: number;
+  inclusionMarginSeconds: number;
+}
+
+function claimTimingBudgets(timing: SharedClaimTiming) {
+  const values = [timing.collectionMarginSeconds, timing.signingMarginSeconds, timing.inclusionMarginSeconds];
+  const total = values.reduce((sum, value) => sum + value, 0);
+  requireShared(values.every(value => Number.isSafeInteger(value) && value > 0) && total <= 900,
+    'timing_policy', 'explicit positive collection/signing/inclusion budgets must total at most 900 seconds');
+  return { prepare: total, submit: timing.signingMarginSeconds + timing.inclusionMarginSeconds,
+    broadcast: timing.inclusionMarginSeconds };
+}
 
 export function requireSharedClaimWindow(deadline: bigint, now: number, timing: SharedClaimTiming,
-  stage: 'prepare' | 'broadcast', issuedAt: bigint): void {
-  requireShared(Number.isSafeInteger(timing.signingMarginSeconds) && timing.signingMarginSeconds > 0
-    && Number.isSafeInteger(timing.inclusionMarginSeconds) && timing.inclusionMarginSeconds > 0
-    && timing.signingMarginSeconds + timing.inclusionMarginSeconds < 900,
-  'timing_policy', 'explicit positive signing/inclusion margins must total less than 900 seconds');
-  const required = BigInt(timing.inclusionMarginSeconds + (stage === 'prepare' ? timing.signingMarginSeconds : 0));
+  stage: 'prepare' | 'submit' | 'broadcast', issuedAt: bigint): void {
+  const budgets = claimTimingBudgets(timing);
+  requireShared(Number.isSafeInteger(now) && now >= 0 && Object.hasOwn(budgets, stage),
+    'timing_policy', 'canonical clock and timing stage required');
+  const required = BigInt(budgets[stage]);
   requireShared(deadline - BigInt(now) >= required, 'claim_window_insufficient',
     `remaining=${deadline - BigInt(now)}s required=${required}s selectedBlockLag=${BigInt(now) - issuedAt}s`);
 }
 
 /**
- * Exclusive-create journal below an existing trusted durable directory. The caller
- * owns its operation lease. Every newly created directory link and file pathname
- * is synced before this resolves; failure propagates and must prevent broadcast.
+ * POSIX exclusive-create journal below an existing trusted durable directory.
+ * The caller owns its operation lease. Every directory link and file pathname is
+ * synced before this resolves. Failure prevents broadcast and may leave a journal;
+ * retain it. EEXIST is never durable success, even for an identical payload.
+ * This helper does not repair or replay. A separately admitted continuation must
+ * validate the original payload/raw/hash and re-sync file/directories under the
+ * same lease before sending the same bytes; never overwrite, delete or reissue.
  */
 export async function persistSharedClaimJournal(anchor: string, directories: readonly string[],
   fileName: string, payload: string): Promise<string> {
+  requireShared(process.platform !== 'win32' && typeof fsConstants.O_DIRECTORY === 'number'
+    && typeof fsConstants.O_NOFOLLOW === 'number', 'journal_platform', 'POSIX directory fsync/no-follow support required');
   const component = (name: string) => name.length > 0 && name !== '.' && name !== '..'
     && !/[^a-zA-Z0-9._-]/.test(name);
   requireShared(isAbsolute(anchor) && directories.every(component) && component(fileName),
@@ -115,11 +135,12 @@ export async function prepareSharedClaim(options: SharedNamingOptions, input: {
   requireShared(actual === requestHash, 'digest_mismatch', 'contract and SDK request digests differ');
   await verified.finish();
   requireSharedClaimWindow(deadline, verified.checkTime(), timing, 'prepare', issuedAt);
-  return { schema: 'pirate.member-name-claim/2', sourceSha256: verified.sourceSha256,
+  return { schema: 'pirate.member-name-claim/3', sourceSha256: verified.sourceSha256,
     chainId: verified.source.chainId, registry: verified.source.registry, claim, requestHash,
     expectedTokenId: sharedTokenIdFor(sharedNameKeyFor(claim.namespaceId, claim.label), claim.generation),
     renewalToken: getAddress(quote.renewalToken), annualRenewalPrice: quote.annualRenewalPrice,
-    quoteBlock: verified.reader.block, timing: { ...timing } };
+    quoteBlock: verified.reader.block, timing: { ...timing },
+    submitBy: deadline - BigInt(claimTimingBudgets(timing).submit) };
 }
 
 export interface SharedClaimTransaction {
@@ -129,7 +150,9 @@ export interface SharedClaimTransaction {
 
 /**
  * The caller must hold an exclusive durable operation lease and recheck current
- * membership/authorization. Persist the exact signed bytes before broadcasting.
+ * membership/authorization. The persistence callback must resolve only after the
+ * exact original payload/raw/hash and required file/directory sync are durable.
+ * An existing or failed-sync journal is not permission to send or allocate again.
  * Recovery uses those bytes/hash; it never calls this function for a new nonce.
  */
 export async function submitSharedClaim(options: SharedNamingOptions, operation: PreparedSharedClaim, controls: {
@@ -139,9 +162,11 @@ export async function submitSharedClaim(options: SharedNamingOptions, operation:
   signTransaction: (transaction: SharedClaimTransaction) => Promise<Hex>;
   persistSignedTransaction: (operation: PreparedSharedClaim, raw: Hex, hash: Hex) => Promise<void>;
 }) {
+  requireShared(operation.schema === 'pirate.member-name-claim/3',
+    'operation_version', 'unsupported prepared claim envelope; retain the original without migration or reissue');
   const { verified, quote } = await readSharedQuote(options, operation.claim.communityId, operation.claim.label);
   const c = operation.claim;
-  requireShared(operation.schema === 'pirate.member-name-claim/2' && operation.sourceSha256 === verified.sourceSha256
+  requireShared(operation.sourceSha256 === verified.sourceSha256
     && operation.chainId === verified.source.chainId && getAddress(operation.registry) === verified.source.registry,
   'source_mismatch', 'operation belongs to another source');
   requireShared(c.namespaceId === verified.delegation.namespaceId && c.years_ === 1 && c.maxCost === 0n
@@ -154,7 +179,9 @@ export async function submitSharedClaim(options: SharedNamingOptions, operation:
     'digest_mismatch', 'stored claim was changed');
   requireShared(operation.expectedTokenId === sharedTokenIdFor(sharedNameKeyFor(c.namespaceId, c.label), c.generation),
     'identity_mismatch', 'stored token identity was changed');
-  requireSharedClaimWindow(c.deadline, verified.checkTime(), operation.timing, 'prepare', c.issuedAt);
+  requireShared(operation.submitBy === c.deadline - BigInt(claimTimingBudgets(operation.timing).submit),
+    'timing_policy', 'stored submit-by differs from the original deadline and timing policy');
+  requireSharedClaimWindow(c.deadline, verified.checkTime(), operation.timing, 'submit', c.issuedAt);
   requireShared(Number.isSafeInteger(controls.nonce) && controls.nonce >= 0 && controls.gas > 0n
     && controls.maxFeePerGas > 0n && controls.maxPriorityFeePerGas >= 0n
     && controls.maxPriorityFeePerGas <= controls.maxFeePerGas

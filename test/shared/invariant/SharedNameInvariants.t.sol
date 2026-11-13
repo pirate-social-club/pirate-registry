@@ -6,6 +6,7 @@ import {ISharedNameRegistryV3 as IShared} from "../../../src/interfaces/ISharedN
 
 contract SharedNameInvariants is SharedNameRegistryTestBase {
     SharedNameHandler private handler;
+
     function setUp() public override {
         super.setUp();
         handler = new SharedNameHandler(registry, ns, COMMUNITY, submitter, admin, GRANT_KEY, HOLDER_KEY);
@@ -20,6 +21,7 @@ contract SharedNameInvariants is SharedNameRegistryTestBase {
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
         targetContract(address(handler));
     }
+
     function invariantCountersEqualSuccessfulClaimsAndNeverExceedLimits() public view {
         IShared.Policy memory p = registry.policy(ns);
         IShared.Scope memory s = registry.scope(ns, COMMUNITY);
@@ -31,6 +33,7 @@ contract SharedNameInvariants is SharedNameRegistryTestBase {
         assertFalse(handler.managerSurvivedTransfer());
         assertEq(token.balanceOf(address(registry)), handler.paidRenewals());
     }
+
     function invariantIssuedTokensRetainHolderAndIdentity() public view {
         for (uint256 i; i < handler.tokenCount(); ++i) {
             uint256 id = handler.tokens(i);
