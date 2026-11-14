@@ -3,6 +3,7 @@ pragma solidity 0.8.30;
 
 import {SharedNameRegistryV4TestBase} from "./SharedNameRegistryV4TestBase.sol";
 import {ISharedNameRegistryV4 as IShared} from "../../src/interfaces/ISharedNameRegistryV4.sol";
+import {IERC721Errors} from "@openzeppelin/contracts/interfaces/draft-IERC6093.sol";
 
 contract SharedNameScopeValidityV4Test is SharedNameRegistryV4TestBase {
     bytes32 private constant OTHER = keccak256("fixture-other-community");
@@ -612,6 +613,59 @@ contract SharedNameScopeValidityV4Test is SharedNameRegistryV4TestBase {
         registry.refreshNamespace(migrating, keccak256("fixture-hns-authorization"), keccak256("proof"), uint64(block.timestamp), uint64(block.timestamp + 100), 1, 1);
         assertFalse(registry.authority(pending).issuanceEnabled);
         assertEq(registry.authority(pending).revision, 0);
+    }
+
+    function testFixedCollectionMetadataRetainsERC721Surface() public view {
+        assertEq(registry.name(), "Pirate Shared Names");
+        assertEq(registry.symbol(), "PSN");
+        assertTrue(registry.supportsInterface(0x80ac58cd));
+        assertTrue(registry.supportsInterface(0x5b5e139f));
+        assertTrue(registry.supportsInterface(0x01ffc9a7));
+        assertFalse(registry.supportsInterface(0xffffffff));
+    }
+
+    function testFixedTokenURIKeepsExistenceReleasedAndSupersededBehavior() public {
+        vm.expectRevert(abi.encodeWithSelector(IERC721Errors.ERC721NonexistentToken.selector, 0));
+        registry.tokenURI(0);
+        uint256 oldId = _issue("member001");
+        assertEq(registry.tokenURI(oldId), "");
+        vm.warp(uint256(registry.expiresAt(oldId)) + 30 days);
+        assertEq(uint256(registry.status(oldId)), uint256(IShared.Status.Released));
+        assertEq(registry.tokenURI(oldId), "");
+        vm.prank(admin);
+        registry.attestNamespace(ns, keccak256("fixture-hns-authorization"), keccak256("fixture-hns-proof"),
+            uint64(block.timestamp), uint64(block.timestamp + 1 days), true);
+        IShared.ScopeAuthorization memory a = _authorization(ns, COMMUNITY);
+        a.namespaceAuthorizationRevision = 2;
+        _authorize(a, 50, uint64(block.timestamp + 1800));
+        uint256 currentId = _issue("member001");
+        assertEq(registry.tokenURI(currentId), "");
+        vm.expectRevert(abi.encodeWithSelector(IERC721Errors.ERC721NonexistentToken.selector, oldId));
+        registry.tokenURI(oldId);
+    }
+
+    function testFixedDomainViewAndInheritedDigestTrackCurrentChain() public {
+        IShared.ScopeAuthorization memory a = _authorization(ns, COMMUNITY);
+        bytes32 original = registry.scopeAuthorizationHash(a);
+        _assertCurrentDomainView();
+        vm.chainId(6343);
+        _assertCurrentDomainView();
+        assertNotEq(registry.scopeAuthorizationHash(a), original);
+        vm.chainId(31337);
+        _assertCurrentDomainView();
+        assertEq(registry.scopeAuthorizationHash(a), original);
+    }
+
+    function _assertCurrentDomainView() private view {
+        (bytes1 fields, string memory domainName, string memory version, uint256 chainId,
+            address verifyingContract, bytes32 salt, uint256[] memory extensions) = registry.eip712Domain();
+        assertEq(uint256(uint8(fields)), 15);
+        assertEq(domainName, "PirateSharedNames");
+        assertEq(version, "4");
+        assertEq(chainId, block.chainid);
+        assertEq(verifyingContract, address(registry));
+        assertEq(salt, bytes32(0));
+        assertEq(extensions.length, 0);
     }
 
     function testExpiredScopeDoesNotBlockZeroPriceThirdPartyRenewalInGrace() public {

@@ -1,6 +1,6 @@
 # Shared registry V4: finite community issuance authority
 
-Normative source specification 4.0.1, 2026-11-14. Source-only successor of
+Normative source specification 4.0.2, 2026-11-14. Source-only successor of
 registry commit bf480445c88030910501923ac12350b2fe1d7e6e. All V3 source,
 compiled ABI, deployments and holder records remain unchanged. V4 is a distinct
 immutable deployment and EIP-712 domain, not a proxy upgrade or a V3 fallback.
@@ -188,6 +188,28 @@ independent TLD owner keeps delegating. Any V3-to-V4 cutover requires the existi
 holder-preserving migration protocol before live issuance in an occupied
 namespace. No resolver may silently repoint or treat matching token formulas as
 proof that a token on another deployment belongs to this registry.
+
+## Fixed metadata size reduction
+
+Version 4.0.2 specializes the inherited metadata accessors to the immutable
+values this registry already uses. ERC-721 name remains Pirate Shared Names,
+symbol remains PSN, and tokenURI still requires an existing token and returns
+the empty string. The EIP-712 domain view still reports fields 0x0f, name
+PirateSharedNames, version 4, current chain ID, this contract, zero salt and no
+extensions. It reads the current chain/address just as the inherited view does.
+
+OpenZeppelin EIP712 remains the hashing implementation, including its
+chain/address-sensitive domain separator and standard digest construction.
+ERC721 transfer, approval, safe receiver checks and all registry authorization,
+expiry, counters, consent, receipts and renewal logic are unchanged. This
+specialization removes unused generic string/URI paths from this concrete
+immutable contract; it adds no proxy, mutable domain or metadata authority.
+
+Callable/event ABI behavior is intended to remain unchanged. Root must compare
+actual compiled ABIs, including any inherited library-error entries, before
+acceptance. Source/code/ABI pins must always come from the new real build.
+Compiler profile and EIP-170 limit remain unchanged. Savings are unmeasured;
+passing tests cannot establish deployability.
 
 ## Qualification gates
 

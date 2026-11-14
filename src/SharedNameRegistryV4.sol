@@ -86,6 +86,38 @@ contract SharedNameRegistryV4 is ERC721, EIP712, ReentrancyGuardTransient, IShar
         return SharedNameKeys.namespaceIdFor(tld);
     }
 
+    // These are the fixed constructor values. Preserve the public metadata
+    // surface without carrying generic string/URI construction into runtime.
+    function name() public view override returns (string memory) {
+        return "Pirate Shared Names";
+    }
+
+    function symbol() public view override returns (string memory) {
+        return "PSN";
+    }
+
+    function tokenURI(uint256 tokenId) public view override returns (string memory) {
+        _requireOwned(tokenId);
+        return "";
+    }
+
+    function eip712Domain()
+        public
+        view
+        override
+        returns (
+            bytes1 fields,
+            string memory name,
+            string memory version,
+            uint256 chainId,
+            address verifyingContract,
+            bytes32 salt,
+            uint256[] memory extensions
+        )
+    {
+        return (hex"0f", "PirateSharedNames", "4", block.chainid, address(this), bytes32(0), new uint256[](0));
+    }
+
     function nameKeyFor(bytes32 namespaceId, string memory label) public pure returns (bytes32) {
         return SharedNameKeys.nameKeyFor(namespaceId, label);
     }
