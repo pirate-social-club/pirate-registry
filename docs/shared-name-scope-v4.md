@@ -1,6 +1,6 @@
 # Shared registry V4: finite community issuance authority
 
-Normative source specification 4.0.0, 2026-11-14. Source-only successor of
+Normative source specification 4.0.1, 2026-11-14. Source-only successor of
 registry commit bf480445c88030910501923ac12350b2fe1d7e6e. All V3 source,
 compiled ABI, deployments and holder records remain unchanged. V4 is a distinct
 immutable deployment and EIP-712 domain, not a proxy upgrade or a V3 fallback.
@@ -10,22 +10,26 @@ No deployment, migration or namespace activation is authorized by this packet.
 
 `ScopeAuthorization` has, in this order, `bytes32 namespaceId`,
 `bytes32 communityId`, `bytes32 installationId`, `address controller`,
-`bytes32 namespaceEvidenceHash`, and `bytes32 evidenceHash`. Every field must be
+`bytes32 namespaceAuthorizationHash`, `uint64 namespaceAuthorizationRevision`,
+and `bytes32 evidenceHash`. Every field must be
 nonzero. The evidence identifies the authorization of this exact community,
 installation and controller to issue in this namespace. Merely selecting the
 same namespace or shared-registry address grants no rights.
 
 `scopeAuthorizationHash(authorization)` is the EIP-712 digest of
-`ScopeAuthorization(bytes32 namespaceId,bytes32 communityId,bytes32 installationId,address controller,bytes32 namespaceEvidenceHash,bytes32 evidenceHash)`
+`ScopeAuthorization(bytes32 namespaceId,bytes32 communityId,bytes32 installationId,address controller,bytes32 namespaceAuthorizationHash,uint64 namespaceAuthorizationRevision,bytes32 evidenceHash)`
 under name `PirateSharedNames`, version `4`, actual chain ID and this registry.
-The last evidence hash commits to the verifier's complete retained evidence;
-it is not, by itself, proof of an external fact. The namespace evidence hash
-must equal the currently attested namespace evidence at activation, refresh,
-quote and claim. Evidence changes close the old scope until explicit admission.
+The last evidence hash commits to the verifier's retained community binding
+authorization, not each later namespace observation; it is not, by itself, proof
+of an external fact. Namespace authorization hash and revision must equal the
+current namespace binding and semantic epoch at activation, refresh, quote and
+claim. New observations of that same authority do not alter those commitments.
+A new ownership/delegation epoch closes old scopes until explicit admission.
 
 `Scope` retains the V3 fields `submitter`, `totalClaimLimit`, `totalClaims`,
 `revision`, `enabled`, followed by `authorizationHash`,
-`namespaceEvidenceHash`, `observedAt`, and `validUntil`. Unconfigured scopes
+`namespaceAuthorizationHash`, `namespaceAuthorizationRevision`, `observedAt`,
+and `validUntil`. Unconfigured scopes
 have zero state and are disabled. Counters are lifetime counters, never refilled.
 
 The V3 `configureScope` selector is absent. The V4 functions are:
@@ -41,7 +45,7 @@ No registrar, submitter, controller or grant signer gains this capability.
 Adding delegated attester/registrar roles is a separate contract change.
 
 Activation checks current namespace freshness/issuance, migration closure,
-configured policy, exact namespace evidence, nonzero fields, distinct grant
+configured policy, exact namespace authorization and epoch, nonzero fields, distinct grant
 signer and submitter, positive bounded lifetime limit no lower than claims
 already consumed, and compare-and-swap on `expectedRevision`. Observations must
 be non-future and nondecreasing. Validity must be strictly after now and the
@@ -54,10 +58,10 @@ Refresh requires an enabled, still-current scope, exactly the same authorization
 digest and expected revision, a strictly newer observation, and nondecreasing
 expiry within the same finite bounds. It cannot change limits, counters,
 submitter, installation, controller or evidence commitment. It cannot revive
-expired, disabled, revoked or namespace-evidence-stale authority. A pure refresh
+expired, disabled, revoked or namespace-epoch-stale authority. A pure refresh
 does not increment the scope revision: existing grants retain their original
-deadline; no signature gains a longer term. Namespace refresh behavior remains
-V3 behavior in this P0 change, including its authority revision changes.
+deadline; no signature gains a longer term. Namespace freshness is separate
+from semantic authorization as specified below.
 
 Revocation disables the scope and increments revision, retaining its commitment,
 times and counters for audit. A stale CAS fails. Reactivation is explicit
@@ -70,6 +74,53 @@ The new refusal is `ScopeUnavailable()`; invalid evidence/configuration and
 revision/signature errors retain their existing categories. These declarations
 are source interfaces, not a generated JSON ABI.
 
+## Namespace authorization epoch and observation freshness
+
+This finite correction leaves published V3 unchanged. In V4, `Authority` retains
+its prior fields and appends `bytes32 authorizationHash` and
+`uint64 freshnessVersion`. Its existing `revision` is the semantic authorization
+epoch. `evidenceHash` identifies the latest retained observation evidence, not
+the durable binding identity.
+
+The stable authorization hash commits to the actual TLD identity, external
+ownership/control epoch, delegation rights and exact registry/chain target.
+The verifier must establish those facts from canonical external evidence; it
+must not treat equal arbitrary hashes as proof. A change in ownership,
+delegation rights or target requires explicit reauthorization even if the
+controller address happens to remain the same.
+
+V4 `attestNamespace(namespaceId,authorizationHash,evidenceHash,observedAt,validUntil,issuanceEnabled)`
+is explicit activation/reauthorization. It increments both semantic `revision`
+and `freshnessVersion`, including when readmitting the same binding after a
+lapse. Existing `setNamespaceIssuance` increments semantic revision; it is an
+explicit administrative change, never a freshness helper.
+
+`refreshNamespace(namespaceId,authorizationHash,evidenceHash,observedAt,validUntil,expectedRevision,expectedFreshnessVersion)`
+is admin-only and requires enabled, non-migrating, currently unexpired authority,
+the exact existing authorization hash and both CAS versions. Observation must
+strictly advance, cannot be in the future, and expiry cannot decrease.
+The existing one-day bound from observation remains. It updates evidence,
+observation and expiry and increments only `freshnessVersion`. It cannot
+activate, enable, revive, rebind, change policy, rotate signers or increase caps.
+It does not modify any community scope's validity or grant deadline.
+
+`AuthorityAttested` includes `authorizationHash` immediately after namespaceId
+and `freshnessVersion` immediately after revision. Consumers can distinguish
+semantic changes from observation refresh without inferring identity from
+evidence bytes. No delegated attester role is introduced.
+
+Each scope stores and commits the namespace's semantic revision in addition to
+its authorization hash. Consequently suspension, revocation, ownership change
+or explicit reauthorization makes the old scope unusable, even if later evidence
+returns to the same hash. Explicit scope admission is then required; a refresh
+cannot revive it. Expired grants remain expired and consumed counters remain
+consumed. A freshness-only update preserves otherwise valid collected signatures.
+
+The SDK validates the canonical snapshot's namespace authorization/epoch and
+observation fields independently. Freshness version is not added to a signed
+claim: it must not cancel an otherwise valid original operation. All existing
+safe-block, source verification, finite timing and immutable journal rules remain.
+
 ## Quote, consent and claim
 
 `PROTOCOL_VERSION` and EIP-712 version are 4. `FreeClaim` retains V3 order with
@@ -78,7 +129,7 @@ Both the issuer's `FreeClaim` and nested recipient `ClaimAcceptance` include it.
 `NameQuote` appends `scopeAuthorizationHash` and `scopeValidUntil`.
 
 Both quote and claim require the exact enabled scope, `now < validUntil`, and
-matching namespace evidence. Claim additionally requires the current scope
+matching namespace authorization and epoch. Claim additionally requires the current scope
 commitment/revision and `deadline <= scope.validUntil`. The grant deadline is
 inclusive, but scope expiry is exclusive: a claim at scope expiry always fails,
 even when its signed deadline equals that time. The independent namespace

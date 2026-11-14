@@ -11,8 +11,11 @@ import { prepareSharedClaimV4, scopeAuthorizationTypedDataV4, claimTypedDataV4,
 const artifact: { abi: Abi; deployedBytecode: { object: unknown } } = JSON.parse(readFileSync(
   new URL('../../../out/SharedNameRegistryV4.sol/SharedNameRegistryV4.json', import.meta.url), 'utf8'));
 assert.ok(Array.isArray(artifact.abi), 'actual compiled V4 ABI required');
-const code = artifact.deployedBytecode.object;
-assert.ok(typeof code === 'string' && isHex(code) && code.length > 2, 'actual compiled runtime required');
+function requireCompiledRuntime(value: unknown): Hex {
+  assert.ok(typeof value === 'string' && isHex(value) && value.length > 2, 'actual compiled runtime required');
+  return value;
+}
+const code = requireCompiledRuntime(artifact.deployedBytecode.object);
 const abi = artifact.abi;
 const h = (byte: string): Hex => {
   const value = `0x${byte.repeat(64)}`;
@@ -30,17 +33,19 @@ function fixture() {
   };
   const authorization: ScopeAuthorizationV4 = { namespaceId: h('3'), communityId: h('4'),
     installationId: h('5'), controller: '0x2222222222222222222222222222222222222222',
-    namespaceEvidenceHash: h('6'), evidenceHash: h('7') };
+    namespaceAuthorizationHash: h('6'), namespaceAuthorizationRevision: 1n, evidenceHash: h('7') };
   const authorizationHash = hashTypedData(scopeAuthorizationTypedDataV4(abi, source, authorization));
   const snapshot: SharedV4QuoteSnapshot = {
     chainId: 31337, registry: source.registry,
     block: { tag: 'safe', number: 10n, hash: h('8'), timestamp: 1000n },
-    authority: { evidenceHash: authorization.namespaceEvidenceHash, validUntil: 4000n,
+    authority: { authorizationHash: authorization.namespaceAuthorizationHash, evidenceHash: h('b'),
+      revision: 1n, freshnessVersion: 1n, observedAt: 900n, validUntil: 4000n,
       issuanceEnabled: true, migrationRequired: false },
     grantSigner: '0x3333333333333333333333333333333333333333',
     scope: { submitter: '0x4444444444444444444444444444444444444444', totalClaimLimit: 10n,
       totalClaims: 1n, revision: 1n, enabled: true, authorizationHash,
-      namespaceEvidenceHash: authorization.namespaceEvidenceHash, observedAt: 900n, validUntil: 1500n },
+      namespaceAuthorizationHash: authorization.namespaceAuthorizationHash, namespaceAuthorizationRevision: 1n,
+      observedAt: 900n, validUntil: 1500n },
     quote: { authorityRevision: 1n, policyRevision: 1n, scopeRevision: 1n, scopeAuthorizationHash: authorizationHash,
       scopeValidUntil: 1500n, generation: 1n, status: 0,
       reservedFor: '0x0000000000000000000000000000000000000000', initialPrice: 0n, issuanceEnabled: true,
@@ -97,11 +102,11 @@ test('installation, controller and evidence changes cannot use the saved commitm
   }
 });
 
-test('changed namespace evidence and inconsistent quote revisions refuse', () => {
+test('changed namespace authorization and inconsistent quote revisions refuse', () => {
   const f = fixture();
-  f.snapshot.authority.evidenceHash = h('a');
+  f.snapshot.authority.authorizationHash = h('a');
   assert.throws(() => f.prepare(), /v4_scope_binding/);
-  f.snapshot.authority.evidenceHash = f.authorization.namespaceEvidenceHash;
+  f.snapshot.authority.authorizationHash = f.authorization.namespaceAuthorizationHash;
   f.snapshot.quote.scopeRevision++;
   assert.throws(() => f.prepare(), /v4_scope_binding/);
 });
@@ -229,6 +234,74 @@ test('nested consent and issuer digest bind commitment, chain, contract and vers
   assert.notEqual(hashTypedData({ ...issuer, domain: { ...issuer.domain,
     verifyingContract: '0x7777777777777777777777777777777777777777' } }), op.requestHash);
   assert.notEqual(hashTypedData({ ...issuer, domain: { ...issuer.domain, version: '3' } }), op.requestHash);
+});
+
+test('fresh namespace observations preserve scope binding and the original prepared operation', () => {
+  const f = fixture(), original = f.prepare();
+  f.snapshot.block.number++;
+  f.snapshot.block.hash = h('a');
+  f.snapshot.block.timestamp = 1010n;
+  f.snapshot.authority.observedAt = 1010n;
+  f.snapshot.authority.validUntil = 5000n;
+  f.snapshot.authority.evidenceHash = h('c');
+  f.snapshot.authority.freshnessVersion++;
+  const next = f.prepare(1010n);
+  assert.equal(next.claim.authorityRevision, original.claim.authorityRevision);
+  assert.equal(next.claim.scopeRevision, original.claim.scopeRevision);
+  assert.equal(next.claim.scopeAuthorizationHash, original.claim.scopeAuthorizationHash);
+  assert.equal(original.claim.issuedAt, 1000n);
+  assert.equal(original.claim.deadline, 1499n);
+  assert.equal(original.requestHash, hashTypedData(claimTypedDataV4(abi, f.source, original.claim)));
+  assert.equal(f.snapshot.scope.totalClaims, 1n);
+  assert.equal(f.snapshot.scope.totalClaimLimit, 10n);
+  // This is preparation only. The original is not replaced or resubmitted.
+});
+
+test('same namespace hash after a new epoch cannot reuse the previous scope', () => {
+  const f = fixture();
+  f.snapshot.authority.revision = 2n;
+  f.snapshot.quote.authorityRevision = 2n;
+  assert.throws(() => f.prepare(), /v4_scope_binding/);
+  f.authorization.namespaceAuthorizationRevision = 2n;
+  assert.throws(() => f.prepare(), /v4_scope_binding/);
+  f.snapshot.scope.namespaceAuthorizationRevision = 2n;
+  assert.throws(() => f.prepare(), /v4_scope_binding/);
+});
+
+test('namespace epoch is part of the compiled scope authorization digest', () => {
+  const f = fixture();
+  const original = hashTypedData(scopeAuthorizationTypedDataV4(abi, f.source, f.authorization));
+  f.authorization.namespaceAuthorizationRevision = 2n;
+  assert.notEqual(hashTypedData(scopeAuthorizationTypedDataV4(abi, f.source, f.authorization)), original);
+  f.authorization.namespaceAuthorizationRevision = 0n;
+  assert.throws(() => scopeAuthorizationTypedDataV4(abi, f.source, f.authorization), /v4_invalid_uint64/);
+});
+
+test('namespace observation requires nonzero proof and version and bounded nonfuture time', () => {
+  const missing = fixture();
+  missing.snapshot.authority.evidenceHash = h('0');
+  assert.throws(() => missing.prepare(), /v4_invalid_digest/);
+  const version = fixture();
+  version.snapshot.authority.freshnessVersion = 0n;
+  assert.throws(() => version.prepare(), /v4_invalid_uint64/);
+  const future = fixture();
+  future.snapshot.authority.observedAt = 1001n;
+  assert.throws(() => future.prepare(), /v4_authority_unavailable/);
+  const excessive = fixture();
+  excessive.snapshot.authority.validUntil = excessive.snapshot.authority.observedAt + 86401n;
+  assert.throws(() => excessive.prepare(), /v4_authority_unavailable/);
+});
+
+test('scope flags cannot authorize an expired suspended or migrating namespace', () => {
+  const expired = fixture();
+  expired.snapshot.authority.validUntil = 1000n;
+  assert.throws(() => expired.prepare(), /v4_authority_unavailable/);
+  const suspended = fixture();
+  suspended.snapshot.authority.issuanceEnabled = false;
+  assert.throws(() => suspended.prepare(), /v4_authority_unavailable/);
+  const migrating = fixture();
+  migrating.snapshot.authority.migrationRequired = true;
+  assert.throws(() => migrating.prepare(), /v4_authority_unavailable/);
 });
 
 test('prepared request and its snapshot stay immutable when inputs are later changed', () => {

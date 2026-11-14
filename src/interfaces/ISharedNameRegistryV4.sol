@@ -19,6 +19,8 @@ interface ISharedNameRegistryV4 {
         uint64 revision;
         bool migrationRequired;
         bool issuanceEnabled;
+        bytes32 authorizationHash;
+        uint64 freshnessVersion;
     }
 
     struct Policy {
@@ -36,7 +38,8 @@ interface ISharedNameRegistryV4 {
         bytes32 communityId;
         bytes32 installationId;
         address controller;
-        bytes32 namespaceEvidenceHash;
+        bytes32 namespaceAuthorizationHash;
+        uint64 namespaceAuthorizationRevision;
         bytes32 evidenceHash;
     }
 
@@ -47,7 +50,8 @@ interface ISharedNameRegistryV4 {
         uint64 revision;
         bool enabled;
         bytes32 authorizationHash;
-        bytes32 namespaceEvidenceHash;
+        bytes32 namespaceAuthorizationHash;
+        uint64 namespaceAuthorizationRevision;
         uint64 observedAt;
         uint64 validUntil;
     }
@@ -95,10 +99,12 @@ interface ISharedNameRegistryV4 {
     event NamespaceRegistered(bytes32 indexed namespaceId, string tld, bool migrationRequired);
     event AuthorityAttested(
         bytes32 indexed namespaceId,
+        bytes32 authorizationHash,
         bytes32 evidenceHash,
         uint64 observedAt,
         uint64 validUntil,
         uint64 revision,
+        uint64 freshnessVersion,
         bool issuanceEnabled
     );
     event PolicyConfigured(
@@ -194,10 +200,20 @@ interface ISharedNameRegistryV4 {
     function registerNamespace(string calldata tld, bool migrationRequired) external returns (bytes32);
     function attestNamespace(
         bytes32 namespaceId,
+        bytes32 authorizationHash,
         bytes32 evidenceHash,
         uint64 observedAt,
         uint64 validUntil,
         bool issuanceEnabled
+    ) external;
+    function refreshNamespace(
+        bytes32 namespaceId,
+        bytes32 authorizationHash,
+        bytes32 evidenceHash,
+        uint64 observedAt,
+        uint64 validUntil,
+        uint64 expectedRevision,
+        uint64 expectedFreshnessVersion
     ) external;
     function setNamespaceIssuance(bytes32 namespaceId, bool enabled) external;
     function configurePolicy(

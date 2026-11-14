@@ -8,7 +8,8 @@ export interface ScopeAuthorizationV4 {
   communityId: Hex;
   installationId: Hex;
   controller: Address;
-  namespaceEvidenceHash: Hex;
+  namespaceAuthorizationHash: Hex;
+  namespaceAuthorizationRevision: bigint;
   evidenceHash: Hex;
 }
 export interface ScopeStateV4 {
@@ -18,7 +19,8 @@ export interface ScopeStateV4 {
   revision: bigint;
   enabled: boolean;
   authorizationHash: Hex;
-  namespaceEvidenceHash: Hex;
+  namespaceAuthorizationHash: Hex;
+  namespaceAuthorizationRevision: bigint;
   observedAt: bigint;
   validUntil: bigint;
 }
@@ -53,7 +55,8 @@ export interface SharedV4QuoteSnapshot {
   chainId: number;
   registry: Address;
   block: { tag: 'safe'; number: bigint; hash: Hex; timestamp: bigint };
-  authority: { evidenceHash: Hex; validUntil: bigint; issuanceEnabled: boolean; migrationRequired: boolean };
+  authority: { authorizationHash: Hex; evidenceHash: Hex; revision: bigint; freshnessVersion: bigint;
+    observedAt: bigint; validUntil: bigint; issuanceEnabled: boolean; migrationRequired: boolean };
   grantSigner: Address;
   scope: ScopeStateV4;
   quote: {
@@ -116,12 +119,14 @@ export function scopeAuthorizationTypedDataV4(abi: Abi, source: SharedV4SourceSe
   authorization: ScopeAuthorizationV4) {
   selected(abi, source);
   for (const value of [authorization.namespaceId, authorization.communityId, authorization.installationId,
-    authorization.namespaceEvidenceHash, authorization.evidenceHash]) nonzero32(value);
+    authorization.namespaceAuthorizationHash, authorization.evidenceHash]) nonzero32(value);
   const fields = tupleFields(abi, 'scopeAuthorizationHash', ['namespaceId', 'communityId', 'installationId',
-    'controller', 'namespaceEvidenceHash', 'evidenceHash']);
+    'controller', 'namespaceAuthorizationHash', 'namespaceAuthorizationRevision', 'evidenceHash']);
+  uint64(authorization.namespaceAuthorizationRevision, true);
   const message = { namespaceId: authorization.namespaceId, communityId: authorization.communityId,
     installationId: authorization.installationId, controller: nonzeroAddress(authorization.controller),
-    namespaceEvidenceHash: authorization.namespaceEvidenceHash, evidenceHash: authorization.evidenceHash };
+    namespaceAuthorizationHash: authorization.namespaceAuthorizationHash,
+    namespaceAuthorizationRevision: authorization.namespaceAuthorizationRevision, evidenceHash: authorization.evidenceHash };
   return { domain: domain(source), primaryType: 'ScopeAuthorization' as const,
     types: { ScopeAuthorization: fields }, message };
 }
@@ -160,17 +165,24 @@ export function prepareSharedClaimV4(abi: Abi, source: SharedV4SourceSelection,
   uint64(now); uint64(block.timestamp);
   requireV4(now >= block.timestamp, 'v4_clock');
   const authorizationHash = hashTypedData(scopeAuthorizationTypedDataV4(abi, source, authorization));
-  for (const value of [scope.observedAt, scope.validUntil, authority.validUntil]) uint64(value);
-  for (const value of [scope.revision, quote.generation, quote.authorityRevision, quote.policyRevision]) uint64(value, true);
+  for (const value of [scope.observedAt, scope.validUntil, authority.observedAt, authority.validUntil]) uint64(value);
+  nonzero32(authority.evidenceHash);
+  for (const value of [scope.revision, scope.namespaceAuthorizationRevision, quote.generation, quote.authorityRevision,
+    quote.policyRevision, authority.revision, authority.freshnessVersion]) uint64(value, true);
   for (const value of [scope.totalClaims, scope.totalClaimLimit]) uint64(value);
-  requireV4(authority.issuanceEnabled && !authority.migrationRequired && authority.validUntil > now,
+  requireV4(authority.issuanceEnabled && !authority.migrationRequired && authority.validUntil > now
+    && authority.observedAt <= block.timestamp && authority.validUntil > authority.observedAt
+    && authority.validUntil - authority.observedAt <= 86400n,
     'v4_authority_unavailable');
   requireV4(scope.enabled && scope.observedAt <= block.timestamp && scope.validUntil > now
     && scope.validUntil > scope.observedAt && scope.validUntil - scope.observedAt <= 86400n,
   'v4_scope_unavailable');
   requireV4(scope.authorizationHash === authorizationHash && quote.scopeAuthorizationHash === authorizationHash
-    && scope.namespaceEvidenceHash === authorization.namespaceEvidenceHash
-    && authority.evidenceHash === authorization.namespaceEvidenceHash
+    && scope.namespaceAuthorizationHash === authorization.namespaceAuthorizationHash
+    && authority.authorizationHash === authorization.namespaceAuthorizationHash
+    && scope.namespaceAuthorizationRevision === authorization.namespaceAuthorizationRevision
+    && authority.revision === authorization.namespaceAuthorizationRevision
+    && quote.authorityRevision === authority.revision
     && quote.scopeRevision === scope.revision && quote.scopeValidUntil === scope.validUntil,
   'v4_scope_binding');
   requireV4(nonzeroAddress(scope.submitter) !== nonzeroAddress(snapshot.grantSigner), 'v4_roles');

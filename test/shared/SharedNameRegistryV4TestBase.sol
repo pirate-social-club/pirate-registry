@@ -40,7 +40,7 @@ abstract contract SharedNameRegistryV4TestBase is Test {
         vm.startPrank(admin);
         id = registry.registerNamespace(tld, migration);
         registry.attestNamespace(
-            id, keccak256("fixture-hns-proof"), uint64(block.timestamp), uint64(block.timestamp + 1 days), !migration
+            id, keccak256("fixture-hns-authorization"), keccak256("fixture-hns-proof"), uint64(block.timestamp), uint64(block.timestamp + 1 days), !migration
         );
         registry.configurePolicy(id, grantSigner, RENEWAL_PRICE, 100);
         if (!migration) {
@@ -58,7 +58,8 @@ abstract contract SharedNameRegistryV4TestBase is Test {
             communityId: community,
             installationId: keccak256(abi.encode("fixture-installation", community)),
             controller: holder,
-            namespaceEvidenceHash: keccak256("fixture-hns-proof"),
+            namespaceAuthorizationHash: keccak256("fixture-hns-authorization"),
+            namespaceAuthorizationRevision: 1,
             evidenceHash: keccak256(abi.encode("fixture-community-authorization", id, community))
         });
     }

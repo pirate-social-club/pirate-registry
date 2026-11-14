@@ -32,7 +32,7 @@ contract SharedNameRegistryV4 is ERC721, EIP712, ReentrancyGuardTransient, IShar
     );
 
     bytes32 public constant SCOPE_AUTHORIZATION_TYPEHASH = keccak256(
-        "ScopeAuthorization(bytes32 namespaceId,bytes32 communityId,bytes32 installationId,address controller,bytes32 namespaceEvidenceHash,bytes32 evidenceHash)"
+        "ScopeAuthorization(bytes32 namespaceId,bytes32 communityId,bytes32 installationId,address controller,bytes32 namespaceAuthorizationHash,uint64 namespaceAuthorizationRevision,bytes32 evidenceHash)"
     );
 
     struct TokenState {
@@ -108,6 +108,7 @@ contract SharedNameRegistryV4 is ERC721, EIP712, ReentrancyGuardTransient, IShar
 
     function attestNamespace(
         bytes32 namespaceId,
+        bytes32 authorizationHash,
         bytes32 evidenceHash,
         uint64 observedAt,
         uint64 validUntil,
@@ -115,18 +116,50 @@ contract SharedNameRegistryV4 is ERC721, EIP712, ReentrancyGuardTransient, IShar
     ) external onlyAdmin {
         Authority storage a = _authority(namespaceId);
         if (
-            evidenceHash == bytes32(0) || observedAt < a.observedAt || observedAt > block.timestamp
+            authorizationHash == bytes32(0) || evidenceHash == bytes32(0)
+                || observedAt < a.observedAt || observedAt > block.timestamp
                 || validUntil <= block.timestamp || validUntil <= observedAt
                 || uint256(validUntil) - observedAt > MAX_AUTHORITY_LIFETIME
         ) {
             revert InvalidConfiguration();
         }
         if (issuanceEnabled && a.migrationRequired) revert MigrationRequired();
+        a.authorizationHash = authorizationHash;
         a.evidenceHash = evidenceHash;
         a.observedAt = observedAt;
         a.validUntil = validUntil;
         a.issuanceEnabled = issuanceEnabled;
         a.revision++;
+        a.freshnessVersion++;
+        _emitAuthority(namespaceId, a);
+    }
+
+    /// @notice Refresh observation only; never activate, revive or reauthorize.
+    function refreshNamespace(
+        bytes32 namespaceId,
+        bytes32 authorizationHash,
+        bytes32 evidenceHash,
+        uint64 observedAt,
+        uint64 validUntil,
+        uint64 expectedRevision,
+        uint64 expectedFreshnessVersion
+    ) external onlyAdmin {
+        Authority storage a = _authority(namespaceId);
+        if (a.revision != expectedRevision || a.freshnessVersion != expectedFreshnessVersion) {
+            revert RevisionMismatch();
+        }
+        if (a.migrationRequired) revert MigrationRequired();
+        if (!a.issuanceEnabled || block.timestamp >= a.validUntil) revert AuthorityUnavailable();
+        if (
+            authorizationHash == bytes32(0) || authorizationHash != a.authorizationHash
+                || evidenceHash == bytes32(0) || observedAt <= a.observedAt || observedAt > block.timestamp
+                || validUntil < a.validUntil || validUntil <= block.timestamp || validUntil <= observedAt
+                || uint256(validUntil) - observedAt > MAX_AUTHORITY_LIFETIME
+        ) revert InvalidConfiguration();
+        a.evidenceHash = evidenceHash;
+        a.observedAt = observedAt;
+        a.validUntil = validUntil;
+        a.freshnessVersion++;
         _emitAuthority(namespaceId, a);
     }
 
@@ -185,7 +218,8 @@ contract SharedNameRegistryV4 is ERC721, EIP712, ReentrancyGuardTransient, IShar
         s.totalClaimLimit = totalClaimLimit;
         s.enabled = true;
         s.authorizationHash = scopeAuthorizationHash(authorization);
-        s.namespaceEvidenceHash = authorization.namespaceEvidenceHash;
+        s.namespaceAuthorizationHash = authorization.namespaceAuthorizationHash;
+        s.namespaceAuthorizationRevision = authorization.namespaceAuthorizationRevision;
         s.observedAt = observedAt;
         s.validUntil = validUntil;
         s.revision++;
@@ -241,8 +275,9 @@ contract SharedNameRegistryV4 is ERC721, EIP712, ReentrancyGuardTransient, IShar
         if (
             authorization.communityId == bytes32(0) || authorization.installationId == bytes32(0)
                 || authorization.controller == address(0) || authorization.evidenceHash == bytes32(0)
-                || authorization.namespaceEvidenceHash == bytes32(0)
-                || authorization.namespaceEvidenceHash != a.evidenceHash
+                || authorization.namespaceAuthorizationHash == bytes32(0)
+                || authorization.namespaceAuthorizationHash != a.authorizationHash
+                || authorization.namespaceAuthorizationRevision != a.revision
                 || !_policies[authorization.namespaceId].configured
                 || observedAt > block.timestamp || validUntil <= block.timestamp || validUntil <= observedAt
                 || uint256(validUntil) - observedAt > MAX_AUTHORITY_LIFETIME || validUntil > a.validUntil
@@ -251,7 +286,8 @@ contract SharedNameRegistryV4 is ERC721, EIP712, ReentrancyGuardTransient, IShar
 
     function _scopeCurrent(Scope storage s, Authority storage a) private view returns (bool) {
         return s.enabled && s.authorizationHash != bytes32(0) && block.timestamp < s.validUntil
-            && s.namespaceEvidenceHash == a.evidenceHash;
+            && s.namespaceAuthorizationHash == a.authorizationHash
+            && s.namespaceAuthorizationRevision == a.revision;
     }
 
     function setNamePolicy(bytes32 namespaceId, string calldata label, uint256 initialPrice, address reservedFor)
@@ -548,7 +584,10 @@ contract SharedNameRegistryV4 is ERC721, EIP712, ReentrancyGuardTransient, IShar
     }
 
     function _emitAuthority(bytes32 namespaceId, Authority storage a) private {
-        emit AuthorityAttested(namespaceId, a.evidenceHash, a.observedAt, a.validUntil, a.revision, a.issuanceEnabled);
+        emit AuthorityAttested(
+            namespaceId, a.authorizationHash, a.evidenceHash, a.observedAt, a.validUntil,
+            a.revision, a.freshnessVersion, a.issuanceEnabled
+        );
     }
 
     function _emitClaim(FreeClaim calldata c, bytes32 digest, bytes32 key, uint256 tokenId) private {
