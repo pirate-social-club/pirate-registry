@@ -40,13 +40,22 @@ abstract contract SharedNameRegistryV4TestBase is Test {
         vm.startPrank(admin);
         id = registry.registerNamespace(tld, migration);
         registry.attestNamespace(
-            id, keccak256("fixture-hns-authorization"), keccak256("fixture-hns-proof"), uint64(block.timestamp), uint64(block.timestamp + 1 days), !migration
+            id,
+            keccak256("fixture-hns-authorization"),
+            keccak256("fixture-hns-proof"),
+            uint64(vm.getBlockTimestamp()),
+            uint64(vm.getBlockTimestamp() + 1 days),
+            !migration
         );
         registry.configurePolicy(id, grantSigner, RENEWAL_PRICE, 100);
         if (!migration) {
             registry.authorizeScope(
-                _authorization(id, COMMUNITY), submitter, 50, uint64(block.timestamp),
-                uint64(block.timestamp + 1800), 0
+                _authorization(id, COMMUNITY),
+                submitter,
+                50,
+                uint64(vm.getBlockTimestamp()),
+                uint64(vm.getBlockTimestamp() + 1800),
+                0
             );
         }
         vm.stopPrank();
@@ -67,7 +76,7 @@ abstract contract SharedNameRegistryV4TestBase is Test {
     function _authorize(IShared.ScopeAuthorization memory a, uint64 limit, uint64 until) internal {
         uint64 revision = registry.scope(a.namespaceId, a.communityId).revision;
         vm.prank(admin);
-        registry.authorizeScope(a, submitter, limit, uint64(block.timestamp), until, revision);
+        registry.authorizeScope(a, submitter, limit, uint64(vm.getBlockTimestamp()), until, revision);
     }
 
     function _claim(bytes32 id, string memory label) internal returns (IShared.FreeClaim memory c) {
@@ -83,8 +92,8 @@ abstract contract SharedNameRegistryV4TestBase is Test {
             policyRevision: q.policyRevision,
             scopeRevision: q.scopeRevision,
             scopeAuthorizationHash: q.scopeAuthorizationHash,
-            issuedAt: uint64(block.timestamp),
-            deadline: uint64(block.timestamp + 600),
+            issuedAt: uint64(vm.getBlockTimestamp()),
+            deadline: uint64(vm.getBlockTimestamp() + 600),
             years_: 1,
             maxCost: 0
         });
@@ -118,13 +127,11 @@ abstract contract SharedNameRegistryV4TestBase is Test {
         registry.claimFreeName(c, grant, consent);
     }
 
-    function _expectAuthorize(
-        bytes4 reason, IShared.ScopeAuthorization memory a, uint64 limit, uint64 until
-    ) internal {
+    function _expectAuthorize(bytes4 reason, IShared.ScopeAuthorization memory a, uint64 limit, uint64 until) internal {
         uint64 revision = registry.scope(a.namespaceId, a.communityId).revision;
         vm.expectRevert(reason);
         vm.prank(admin);
-        registry.authorizeScope(a, submitter, limit, uint64(block.timestamp), until, revision);
+        registry.authorizeScope(a, submitter, limit, uint64(vm.getBlockTimestamp()), until, revision);
     }
 
     function _issue(string memory label) internal returns (uint256) {

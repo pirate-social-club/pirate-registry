@@ -134,10 +134,7 @@ interface ISharedNameRegistryV4 {
         uint64 revision
     );
     event ScopeRevoked(
-        bytes32 indexed namespaceId,
-        bytes32 indexed communityId,
-        bytes32 indexed authorizationHash,
-        uint64 revision
+        bytes32 indexed namespaceId, bytes32 indexed communityId, bytes32 indexed authorizationHash, uint64 revision
     );
     event NamePolicySet(
         bytes32 indexed namespaceId,

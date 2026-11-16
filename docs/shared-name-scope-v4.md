@@ -213,11 +213,32 @@ passing tests cannot establish deployability.
 
 ## Qualification gates
 
-All cases in the two new test files are prepared and UNRUN. The Solidity base
-uses public fixture keys only on a disposable local chain. The SDK tests read
-the actual V4 compiler artifact and intentionally require Root's prior build;
-no invented ABI fixture is used. Required later gates: format, solc and Solar
-compilation/tests, deployment bytecode size, generated interface comparison,
-SDK types/tests, cross-language digest comparison, unchanged V3 regression,
-source/ABI/code pin verification, and real verifier/HNS/caller acceptance.
-No gate gains a pass from source review or from previous V3 test results.
+The November17 local qualification rebuilt the unchanged baseline at24,887
+runtime bytes, then measured the repaired V4 template at24,545 bytes under the
+unchanged solc0.8.30/Cancun/optimizer200/no-via-IR/no-CBOR profile. The repair
+shares identical observation-window validation, avoids temporary static
+storage-copy buffers and hashes the same fifteen typed claim words. Complete
+compiled ABI and method identifiers match the baseline. Storage layout matches
+after excluding compiler AST identity numbers. The31-byte margin satisfies
+the24,576-byte ceiling; it is a small margin, not a deployment claim.
+
+All157 retained Solidity tests passed with solc, including43 V4 cases, and
+all157 passed with the separate Solar compiler. Solar initially failed three
+time cases; the exact original baseline reproduced all three. The tests now
+read the actual cheatcode clock with vm.getBlockTimestamp(), retaining their
+assertions and expiry boundaries. Production time checks are unchanged.
+Formatting and TypeScript passed, all73 shared resolver/SDK tests passed, and
+the generated V3 ABI and independent identity vectors reproduced without a
+tracked difference after the required formatter step. The V4 source repair and
+test-clock delta received independent source review.
+
+Reproduce the retained local gates with forge fmt --check, forge build --sizes,
+forge test -vv, FOUNDRY_PROFILE=solar forge test --use solar -vv, npm run
+gen:shared-abi, forge fmt test/shared/SharedNameKeys.t.sol, npm run typecheck and
+npm run test:shared. The generated shared ABI/vector paths must remain unchanged.
+The Solidity tests use public fixture keys only on a disposable local chain.
+SDK tests read the actual V4 compiler artifact; no invented ABI fixture is used.
+
+Public deployment, the revised gateway, real verifier/HNS/caller acceptance and
+current deployment/source/code pins remain unrun. The local size and test proof
+does not activate naming, approve a gateway handoff or block Web2 delivery.

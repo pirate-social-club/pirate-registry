@@ -147,14 +147,10 @@ contract SharedNameRegistryV4 is ERC721, EIP712, ReentrancyGuardTransient, IShar
         bool issuanceEnabled
     ) external onlyAdmin {
         Authority storage a = _authority(namespaceId);
-        if (
-            authorizationHash == bytes32(0) || evidenceHash == bytes32(0)
-                || observedAt < a.observedAt || observedAt > block.timestamp
-                || validUntil <= block.timestamp || validUntil <= observedAt
-                || uint256(validUntil) - observedAt > MAX_AUTHORITY_LIFETIME
-        ) {
+        if (authorizationHash == bytes32(0) || evidenceHash == bytes32(0) || observedAt < a.observedAt) {
             revert InvalidConfiguration();
         }
+        _validateObservationWindow(observedAt, validUntil);
         if (issuanceEnabled && a.migrationRequired) revert MigrationRequired();
         a.authorizationHash = authorizationHash;
         a.evidenceHash = evidenceHash;
@@ -183,11 +179,10 @@ contract SharedNameRegistryV4 is ERC721, EIP712, ReentrancyGuardTransient, IShar
         if (a.migrationRequired) revert MigrationRequired();
         if (!a.issuanceEnabled || block.timestamp >= a.validUntil) revert AuthorityUnavailable();
         if (
-            authorizationHash == bytes32(0) || authorizationHash != a.authorizationHash
-                || evidenceHash == bytes32(0) || observedAt <= a.observedAt || observedAt > block.timestamp
-                || validUntil < a.validUntil || validUntil <= block.timestamp || validUntil <= observedAt
-                || uint256(validUntil) - observedAt > MAX_AUTHORITY_LIFETIME
+            authorizationHash == bytes32(0) || authorizationHash != a.authorizationHash || evidenceHash == bytes32(0)
+                || observedAt <= a.observedAt || validUntil < a.validUntil
         ) revert InvalidConfiguration();
+        _validateObservationWindow(observedAt, validUntil);
         a.evidenceHash = evidenceHash;
         a.observedAt = observedAt;
         a.validUntil = validUntil;
@@ -260,8 +255,15 @@ contract SharedNameRegistryV4 is ERC721, EIP712, ReentrancyGuardTransient, IShar
 
     function _emitScopeAuthorized(ScopeAuthorization calldata authorization, Scope storage s) private {
         emit ScopeAuthorized(
-            authorization.namespaceId, authorization.communityId, s.authorizationHash,
-            authorization, s.submitter, s.totalClaimLimit, s.observedAt, s.validUntil, s.revision
+            authorization.namespaceId,
+            authorization.communityId,
+            s.authorizationHash,
+            authorization,
+            s.submitter,
+            s.totalClaimLimit,
+            s.observedAt,
+            s.validUntil,
+            s.revision
         );
     }
 
@@ -283,8 +285,12 @@ contract SharedNameRegistryV4 is ERC721, EIP712, ReentrancyGuardTransient, IShar
         s.observedAt = observedAt;
         s.validUntil = validUntil;
         emit ScopeRefreshed(
-            authorization.namespaceId, authorization.communityId, s.authorizationHash,
-            observedAt, validUntil, s.revision
+            authorization.namespaceId,
+            authorization.communityId,
+            s.authorizationHash,
+            observedAt,
+            validUntil,
+            s.revision
         );
     }
 
@@ -298,9 +304,10 @@ contract SharedNameRegistryV4 is ERC721, EIP712, ReentrancyGuardTransient, IShar
         emit ScopeRevoked(namespaceId, communityId, s.authorizationHash, s.revision);
     }
 
-    function _validateScopeAttestation(
-        ScopeAuthorization calldata authorization, uint64 observedAt, uint64 validUntil
-    ) private view {
+    function _validateScopeAttestation(ScopeAuthorization calldata authorization, uint64 observedAt, uint64 validUntil)
+        private
+        view
+    {
         Authority storage a = _authority(authorization.namespaceId);
         if (a.migrationRequired) revert MigrationRequired();
         if (!a.issuanceEnabled || block.timestamp >= a.validUntil) revert AuthorityUnavailable();
@@ -310,16 +317,21 @@ contract SharedNameRegistryV4 is ERC721, EIP712, ReentrancyGuardTransient, IShar
                 || authorization.namespaceAuthorizationHash == bytes32(0)
                 || authorization.namespaceAuthorizationHash != a.authorizationHash
                 || authorization.namespaceAuthorizationRevision != a.revision
-                || !_policies[authorization.namespaceId].configured
-                || observedAt > block.timestamp || validUntil <= block.timestamp || validUntil <= observedAt
-                || uint256(validUntil) - observedAt > MAX_AUTHORITY_LIFETIME || validUntil > a.validUntil
+                || !_policies[authorization.namespaceId].configured || validUntil > a.validUntil
+        ) revert InvalidConfiguration();
+        _validateObservationWindow(observedAt, validUntil);
+    }
+
+    function _validateObservationWindow(uint64 observedAt, uint64 validUntil) private view {
+        if (
+            observedAt > block.timestamp || validUntil <= block.timestamp || validUntil <= observedAt
+                || uint256(validUntil) - observedAt > MAX_AUTHORITY_LIFETIME
         ) revert InvalidConfiguration();
     }
 
     function _scopeCurrent(Scope storage s, Authority storage a) private view returns (bool) {
         return s.enabled && s.authorizationHash != bytes32(0) && block.timestamp < s.validUntil
-            && s.namespaceAuthorizationHash == a.authorizationHash
-            && s.namespaceAuthorizationRevision == a.revision;
+            && s.namespaceAuthorizationHash == a.authorizationHash && s.namespaceAuthorizationRevision == a.revision;
     }
 
     function setNamePolicy(bytes32 namespaceId, string calldata label, uint256 initialPrice, address reservedFor)
@@ -328,7 +340,9 @@ contract SharedNameRegistryV4 is ERC721, EIP712, ReentrancyGuardTransient, IShar
     {
         _authority(namespaceId);
         bytes32 key = nameKeyFor(namespaceId, label);
-        _namePolicies[key] = NamePolicy(initialPrice, reservedFor);
+        NamePolicy storage np = _namePolicies[key];
+        np.initialPrice = initialPrice;
+        np.reservedFor = reservedFor;
         uint64 revision = ++_policies[namespaceId].revision;
         emit NamePolicySet(namespaceId, key, label, initialPrice, reservedFor, revision);
     }
@@ -380,24 +394,30 @@ contract SharedNameRegistryV4 is ERC721, EIP712, ReentrancyGuardTransient, IShar
         return _hashTypedDataV4(_claimStructHash(c));
     }
 
-    function _claimStructHash(FreeClaim calldata c) private pure returns (bytes32) {
-        // All concatenated words are static ABI words. This is exactly the
-        // EIP-712 encoding and avoids an oversized compiler operand stack.
-        bytes memory identity = abi.encode(
-            CLAIM_TYPEHASH, c.requestId, c.communityId, c.namespaceId, keccak256(bytes(c.label)), c.recipient
-        );
-        bytes memory terms = abi.encode(
-            c.generation,
-            c.authorityRevision,
-            c.policyRevision,
-            c.scopeRevision,
-            c.scopeAuthorizationHash,
-            c.issuedAt,
-            c.deadline,
-            c.years_,
-            c.maxCost
-        );
-        return keccak256(bytes.concat(identity, terms));
+    function _claimStructHash(FreeClaim calldata c) private pure returns (bytes32 digest) {
+        // The same fifteen static ABI words, with typed calldata reads and
+        // explicit scalar padding, without allocating/concatenating byte buffers.
+        bytes32[15] memory words;
+        words[0] = CLAIM_TYPEHASH;
+        words[1] = c.requestId;
+        words[2] = c.communityId;
+        words[3] = c.namespaceId;
+        words[4] = keccak256(bytes(c.label));
+        words[5] = bytes32(uint256(uint160(c.recipient)));
+        words[6] = bytes32(uint256(c.generation));
+        words[7] = bytes32(uint256(c.authorityRevision));
+        words[8] = bytes32(uint256(c.policyRevision));
+        words[9] = bytes32(uint256(c.scopeRevision));
+        words[10] = c.scopeAuthorizationHash;
+        words[11] = bytes32(uint256(c.issuedAt));
+        words[12] = bytes32(uint256(c.deadline));
+        words[13] = bytes32(uint256(c.years_));
+        words[14] = bytes32(c.maxCost);
+        // A fixed-size memory array has no length prefix. Read only its
+        // fifteen allocated words (15 * 32 = 0x1e0 bytes).
+        assembly ("memory-safe") {
+            digest := keccak256(words, 0x1e0)
+        }
     }
 
     function recipientAcceptanceHash(FreeClaim calldata c) public view returns (bytes32) {
@@ -431,10 +451,18 @@ contract SharedNameRegistryV4 is ERC721, EIP712, ReentrancyGuardTransient, IShar
         s.totalClaims++;
         tokenId = tokenIdFor(key, c.generation);
         _generations[key] = c.generation;
-        _tokens[tokenId] =
-            TokenState(c.namespaceId, key, c.generation, uint64(block.timestamp + YEAR), p.annualRenewalPrice);
+        {
+            TokenState storage t = _tokens[tokenId];
+            t.namespaceId = c.namespaceId;
+            t.nameKey = key;
+            t.generation = c.generation;
+            t.expiry = uint64(block.timestamp + YEAR);
+            t.annualRenewalPrice = p.annualRenewalPrice;
+        }
         _labels[tokenId] = c.label;
-        _receipts[c.communityId][c.requestId] = ClaimReceipt(digest, tokenId, uint64(block.number));
+        oldReceipt.requestHash = digest;
+        oldReceipt.tokenId = tokenId;
+        oldReceipt.blockNumber = uint64(block.number);
         if (previous != 0) _burn(tokenIdFor(key, previous));
         _emitClaim(c, digest, key, tokenId);
         _safeMint(c.recipient, tokenId);
@@ -617,8 +645,14 @@ contract SharedNameRegistryV4 is ERC721, EIP712, ReentrancyGuardTransient, IShar
 
     function _emitAuthority(bytes32 namespaceId, Authority storage a) private {
         emit AuthorityAttested(
-            namespaceId, a.authorizationHash, a.evidenceHash, a.observedAt, a.validUntil,
-            a.revision, a.freshnessVersion, a.issuanceEnabled
+            namespaceId,
+            a.authorizationHash,
+            a.evidenceHash,
+            a.observedAt,
+            a.validUntil,
+            a.revision,
+            a.freshnessVersion,
+            a.issuanceEnabled
         );
     }
 

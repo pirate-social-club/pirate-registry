@@ -9,15 +9,27 @@ contract SharedNameScopeValidityV4Test is SharedNameRegistryV4TestBase {
     bytes32 private constant OTHER = keccak256("fixture-other-community");
 
     event ScopeAuthorized(
-        bytes32 indexed namespaceId, bytes32 indexed communityId, bytes32 indexed authorizationHash,
-        IShared.ScopeAuthorization authorization, address submitter, uint64 totalClaimLimit,
-        uint64 observedAt, uint64 validUntil, uint64 revision
+        bytes32 indexed namespaceId,
+        bytes32 indexed communityId,
+        bytes32 indexed authorizationHash,
+        IShared.ScopeAuthorization authorization,
+        address submitter,
+        uint64 totalClaimLimit,
+        uint64 observedAt,
+        uint64 validUntil,
+        uint64 revision
     );
     event ScopeRefreshed(
-        bytes32 indexed namespaceId, bytes32 indexed communityId, bytes32 indexed authorizationHash,
-        uint64 observedAt, uint64 validUntil, uint64 revision
+        bytes32 indexed namespaceId,
+        bytes32 indexed communityId,
+        bytes32 indexed authorizationHash,
+        uint64 observedAt,
+        uint64 validUntil,
+        uint64 revision
     );
-    event ScopeRevoked(bytes32 indexed namespaceId, bytes32 indexed communityId, bytes32 indexed authorizationHash, uint64 revision);
+    event ScopeRevoked(
+        bytes32 indexed namespaceId, bytes32 indexed communityId, bytes32 indexed authorizationHash, uint64 revision
+    );
 
     function testUnverifiedCommunityBCannotBorrowCommunityAScope() public {
         assertTrue(registry.quote(ns, COMMUNITY, "member001").issuanceEnabled);
@@ -32,7 +44,7 @@ contract SharedNameScopeValidityV4Test is SharedNameRegistryV4TestBase {
     }
 
     function testExpiredCommunityBCannotUseFreshGlobalNamespace() public {
-        _authorize(_authorization(ns, OTHER), 2, uint64(block.timestamp + 100));
+        _authorize(_authorization(ns, OTHER), 2, uint64(vm.getBlockTimestamp() + 100));
         IShared.FreeClaim memory c = _claim(ns, "member001");
         c.communityId = OTHER;
         IShared.Scope memory b = registry.scope(ns, OTHER);
@@ -40,14 +52,14 @@ contract SharedNameScopeValidityV4Test is SharedNameRegistryV4TestBase {
         c.scopeAuthorizationHash = b.authorizationHash;
         c.deadline = b.validUntil;
         vm.warp(b.validUntil);
-        assertGt(registry.authority(ns).validUntil, block.timestamp);
+        assertGt(registry.authority(ns).validUntil, vm.getBlockTimestamp());
         assertTrue(registry.quote(ns, COMMUNITY, "member002").issuanceEnabled);
         assertFalse(registry.quote(ns, OTHER, "member001").issuanceEnabled);
         _expectSubmit(IShared.ScopeUnavailable.selector, c);
     }
 
     function testDeadlineEqualScopeExpirySucceedsOnlyBeforeExpiry() public {
-        _authorize(_authorization(ns, COMMUNITY), 50, uint64(block.timestamp + 100));
+        _authorize(_authorization(ns, COMMUNITY), 50, uint64(vm.getBlockTimestamp() + 100));
         IShared.FreeClaim memory c = _claim(ns, "member001");
         c.deadline = registry.scope(ns, COMMUNITY).validUntil;
         vm.warp(c.deadline - 1);
@@ -55,7 +67,7 @@ contract SharedNameScopeValidityV4Test is SharedNameRegistryV4TestBase {
     }
 
     function testExactScopeExpiryRefusesEvenInclusiveGrantDeadline() public {
-        _authorize(_authorization(ns, COMMUNITY), 50, uint64(block.timestamp + 100));
+        _authorize(_authorization(ns, COMMUNITY), 50, uint64(vm.getBlockTimestamp() + 100));
         IShared.FreeClaim memory c = _claim(ns, "member001");
         c.deadline = registry.scope(ns, COMMUNITY).validUntil;
         vm.warp(c.deadline);
@@ -63,7 +75,7 @@ contract SharedNameScopeValidityV4Test is SharedNameRegistryV4TestBase {
     }
 
     function testGrantDeadlineCannotExceedScopeValidity() public {
-        _authorize(_authorization(ns, COMMUNITY), 50, uint64(block.timestamp + 100));
+        _authorize(_authorization(ns, COMMUNITY), 50, uint64(vm.getBlockTimestamp() + 100));
         IShared.FreeClaim memory c = _claim(ns, "member001");
         c.deadline = registry.scope(ns, COMMUNITY).validUntil + 1;
         _expectSubmit(IShared.GrantExpired.selector, c);
@@ -83,7 +95,7 @@ contract SharedNameScopeValidityV4Test is SharedNameRegistryV4TestBase {
 
     function testWrongInstallationControllerOrEvidenceCannotRefreshBinding() public {
         IShared.ScopeAuthorization memory original = _authorization(ns, COMMUNITY);
-        vm.warp(block.timestamp + 1);
+        vm.warp(vm.getBlockTimestamp() + 1);
         for (uint256 field; field < 3; ++field) {
             IShared.ScopeAuthorization memory a = _authorization(ns, COMMUNITY);
             if (field == 0) a.installationId = keccak256("other-installation");
@@ -91,7 +103,7 @@ contract SharedNameScopeValidityV4Test is SharedNameRegistryV4TestBase {
             if (field == 2) a.evidenceHash = keccak256("other-authorization");
             vm.expectRevert(IShared.InvalidConfiguration.selector);
             vm.prank(admin);
-            registry.refreshScope(a, uint64(block.timestamp), uint64(block.timestamp + 1800), 1);
+            registry.refreshScope(a, uint64(vm.getBlockTimestamp()), uint64(vm.getBlockTimestamp() + 1800), 1);
         }
         assertEq(registry.scope(ns, COMMUNITY).authorizationHash, registry.scopeAuthorizationHash(original));
     }
@@ -99,10 +111,10 @@ contract SharedNameScopeValidityV4Test is SharedNameRegistryV4TestBase {
     function testWrongNamespaceAuthorizationRefusesActivationAndRefresh() public {
         IShared.ScopeAuthorization memory a = _authorization(ns, COMMUNITY);
         a.namespaceAuthorizationHash = keccak256("wrong-namespace-authorization");
-        _expectAuthorize(IShared.InvalidConfiguration.selector, a, 50, uint64(block.timestamp + 1800));
+        _expectAuthorize(IShared.InvalidConfiguration.selector, a, 50, uint64(vm.getBlockTimestamp() + 1800));
         vm.expectRevert(IShared.InvalidConfiguration.selector);
         vm.prank(admin);
-        registry.refreshScope(a, uint64(block.timestamp), uint64(block.timestamp + 1800), 1);
+        registry.refreshScope(a, uint64(vm.getBlockTimestamp()), uint64(vm.getBlockTimestamp() + 1800), 1);
     }
 
     function testZeroBindingFieldsRefuseActivation() public {
@@ -114,7 +126,7 @@ contract SharedNameScopeValidityV4Test is SharedNameRegistryV4TestBase {
             if (field == 3) a.evidenceHash = bytes32(0);
             if (field == 4) a.namespaceAuthorizationHash = bytes32(0);
             if (field == 5) a.namespaceAuthorizationRevision = 0;
-            _expectAuthorize(IShared.InvalidConfiguration.selector, a, 2, uint64(block.timestamp + 100));
+            _expectAuthorize(IShared.InvalidConfiguration.selector, a, 2, uint64(vm.getBlockTimestamp() + 100));
         }
     }
 
@@ -142,7 +154,7 @@ contract SharedNameScopeValidityV4Test is SharedNameRegistryV4TestBase {
         (bytes memory grant, bytes memory consent) = _signatures(c);
         vm.prank(admin);
         registry.revokeScope(ns, COMMUNITY, 1);
-        _authorize(_authorization(ns, COMMUNITY), 50, uint64(block.timestamp + 1800));
+        _authorize(_authorization(ns, COMMUNITY), 50, uint64(vm.getBlockTimestamp() + 1800));
         vm.expectRevert(IShared.RevisionMismatch.selector);
         vm.prank(submitter);
         registry.claimFreeName(c, grant, consent);
@@ -152,7 +164,7 @@ contract SharedNameScopeValidityV4Test is SharedNameRegistryV4TestBase {
         IShared.FreeClaim memory c = _claim(ns, "member001");
         IShared.ScopeAuthorization memory a = _authorization(ns, COMMUNITY);
         a.controller = stranger;
-        _authorize(a, 50, uint64(block.timestamp + 1800));
+        _authorize(a, 50, uint64(vm.getBlockTimestamp() + 1800));
         _expectSubmit(IShared.RevisionMismatch.selector, c);
     }
 
@@ -161,11 +173,23 @@ contract SharedNameScopeValidityV4Test is SharedNameRegistryV4TestBase {
         IShared.FreeClaim memory c = _claim(ns, "member002");
         (bytes memory grant, bytes memory consent) = _signatures(c);
         IShared.Scope memory before_ = registry.scope(ns, COMMUNITY);
-        vm.warp(block.timestamp + 10);
+        vm.warp(vm.getBlockTimestamp() + 10);
         vm.expectEmit(true, true, true, true, address(registry));
-        emit ScopeRefreshed(ns, COMMUNITY, before_.authorizationHash, uint64(block.timestamp), uint64(block.timestamp + 2000), before_.revision);
+        emit ScopeRefreshed(
+            ns,
+            COMMUNITY,
+            before_.authorizationHash,
+            uint64(vm.getBlockTimestamp()),
+            uint64(vm.getBlockTimestamp() + 2000),
+            before_.revision
+        );
         vm.prank(admin);
-        registry.refreshScope(_authorization(ns, COMMUNITY), uint64(block.timestamp), uint64(block.timestamp + 2000), before_.revision);
+        registry.refreshScope(
+            _authorization(ns, COMMUNITY),
+            uint64(vm.getBlockTimestamp()),
+            uint64(vm.getBlockTimestamp() + 2000),
+            before_.revision
+        );
         IShared.Scope memory after_ = registry.scope(ns, COMMUNITY);
         assertEq(after_.submitter, before_.submitter);
         assertEq(after_.totalClaimLimit, before_.totalClaimLimit);
@@ -181,14 +205,21 @@ contract SharedNameScopeValidityV4Test is SharedNameRegistryV4TestBase {
         vm.warp(s.validUntil);
         vm.expectRevert(IShared.ScopeUnavailable.selector);
         vm.prank(admin);
-        registry.refreshScope(_authorization(ns, COMMUNITY), uint64(block.timestamp), uint64(block.timestamp + 100), s.revision);
-        _authorize(_authorization(ns, COMMUNITY), 50, uint64(block.timestamp + 100));
+        registry.refreshScope(
+            _authorization(ns, COMMUNITY),
+            uint64(vm.getBlockTimestamp()),
+            uint64(vm.getBlockTimestamp() + 100),
+            s.revision
+        );
+        _authorize(_authorization(ns, COMMUNITY), 50, uint64(vm.getBlockTimestamp() + 100));
         uint64 rev = registry.scope(ns, COMMUNITY).revision;
         vm.prank(admin);
         registry.revokeScope(ns, COMMUNITY, rev);
         vm.expectRevert(IShared.ScopeUnavailable.selector);
         vm.prank(admin);
-        registry.refreshScope(_authorization(ns, COMMUNITY), uint64(block.timestamp), uint64(block.timestamp + 100), rev + 1);
+        registry.refreshScope(
+            _authorization(ns, COMMUNITY), uint64(vm.getBlockTimestamp()), uint64(vm.getBlockTimestamp() + 100), rev + 1
+        );
     }
 
     function testRefreshRefusesStaleObservationShorteningAndStaleCAS() public {
@@ -196,13 +227,15 @@ contract SharedNameScopeValidityV4Test is SharedNameRegistryV4TestBase {
         vm.expectRevert(IShared.InvalidConfiguration.selector);
         vm.prank(admin);
         registry.refreshScope(_authorization(ns, COMMUNITY), s.observedAt, s.validUntil, s.revision);
-        vm.warp(block.timestamp + 1);
+        vm.warp(vm.getBlockTimestamp() + 1);
         vm.expectRevert(IShared.InvalidConfiguration.selector);
         vm.prank(admin);
-        registry.refreshScope(_authorization(ns, COMMUNITY), uint64(block.timestamp), s.validUntil - 1, s.revision);
+        registry.refreshScope(
+            _authorization(ns, COMMUNITY), uint64(vm.getBlockTimestamp()), s.validUntil - 1, s.revision
+        );
         vm.expectRevert(IShared.RevisionMismatch.selector);
         vm.prank(admin);
-        registry.refreshScope(_authorization(ns, COMMUNITY), uint64(block.timestamp), s.validUntil, 0);
+        registry.refreshScope(_authorization(ns, COMMUNITY), uint64(vm.getBlockTimestamp()), s.validUntil, 0);
         vm.expectRevert(IShared.RevisionMismatch.selector);
         vm.prank(admin);
         registry.revokeScope(ns, COMMUNITY, 0);
@@ -212,16 +245,31 @@ contract SharedNameScopeValidityV4Test is SharedNameRegistryV4TestBase {
         IShared.ScopeAuthorization memory a = _authorization(ns, OTHER);
         vm.startPrank(admin);
         vm.expectRevert(IShared.InvalidConfiguration.selector);
-        registry.authorizeScope(a, submitter, 2, uint64(block.timestamp + 1), uint64(block.timestamp + 100), 0);
+        registry.authorizeScope(
+            a, submitter, 2, uint64(vm.getBlockTimestamp() + 1), uint64(vm.getBlockTimestamp() + 100), 0
+        );
         vm.expectRevert(IShared.InvalidConfiguration.selector);
-        registry.authorizeScope(a, submitter, 2, uint64(block.timestamp), uint64(block.timestamp), 0);
+        registry.authorizeScope(a, submitter, 2, uint64(vm.getBlockTimestamp()), uint64(vm.getBlockTimestamp()), 0);
         vm.expectRevert(IShared.InvalidConfiguration.selector);
-        registry.authorizeScope(a, submitter, 2, uint64(block.timestamp), uint64(block.timestamp + 1 days + 1), 0);
-        registry.attestNamespace(ns, a.namespaceAuthorizationHash, keccak256("fixture-hns-proof"), uint64(block.timestamp), uint64(block.timestamp + 100), true);
+        registry.authorizeScope(
+            a, submitter, 2, uint64(vm.getBlockTimestamp()), uint64(vm.getBlockTimestamp() + 1 days + 1), 0
+        );
+        registry.attestNamespace(
+            ns,
+            a.namespaceAuthorizationHash,
+            keccak256("fixture-hns-proof"),
+            uint64(vm.getBlockTimestamp()),
+            uint64(vm.getBlockTimestamp() + 100),
+            true
+        );
         a.namespaceAuthorizationRevision = 2;
         vm.expectRevert(IShared.InvalidConfiguration.selector);
-        registry.authorizeScope(a, submitter, 2, uint64(block.timestamp), uint64(block.timestamp + 101), 0);
-        registry.authorizeScope(a, submitter, 2, uint64(block.timestamp), uint64(block.timestamp + 100), 0);
+        registry.authorizeScope(
+            a, submitter, 2, uint64(vm.getBlockTimestamp()), uint64(vm.getBlockTimestamp() + 101), 0
+        );
+        registry.authorizeScope(
+            a, submitter, 2, uint64(vm.getBlockTimestamp()), uint64(vm.getBlockTimestamp() + 100), 0
+        );
         vm.stopPrank();
     }
 
@@ -231,17 +279,34 @@ contract SharedNameScopeValidityV4Test is SharedNameRegistryV4TestBase {
         for (uint256 index; index < callers.length; ++index) {
             vm.startPrank(callers[index]);
             vm.expectRevert(IShared.Unauthorized.selector);
-            registry.authorizeScope(a, submitter, 50, uint64(block.timestamp), uint64(block.timestamp + 100), 1);
+            registry.authorizeScope(
+                a, submitter, 50, uint64(vm.getBlockTimestamp()), uint64(vm.getBlockTimestamp() + 100), 1
+            );
             vm.expectRevert(IShared.Unauthorized.selector);
-            registry.refreshScope(a, uint64(block.timestamp), uint64(block.timestamp + 1800), 1);
+            registry.refreshScope(a, uint64(vm.getBlockTimestamp()), uint64(vm.getBlockTimestamp() + 1800), 1);
             vm.expectRevert(IShared.Unauthorized.selector);
             registry.revokeScope(ns, COMMUNITY, 1);
             vm.expectRevert(IShared.Unauthorized.selector);
             registry.transferAdmin(callers[index]);
             vm.expectRevert(IShared.Unauthorized.selector);
-            registry.attestNamespace(ns, a.namespaceAuthorizationHash, keccak256("fixture-hns-proof"), uint64(block.timestamp), uint64(block.timestamp + 100), true);
+            registry.attestNamespace(
+                ns,
+                a.namespaceAuthorizationHash,
+                keccak256("fixture-hns-proof"),
+                uint64(vm.getBlockTimestamp()),
+                uint64(vm.getBlockTimestamp() + 100),
+                true
+            );
             vm.expectRevert(IShared.Unauthorized.selector);
-            registry.refreshNamespace(ns, a.namespaceAuthorizationHash, keccak256("next-proof"), uint64(block.timestamp), uint64(block.timestamp + 1 days), 1, 1);
+            registry.refreshNamespace(
+                ns,
+                a.namespaceAuthorizationHash,
+                keccak256("next-proof"),
+                uint64(vm.getBlockTimestamp()),
+                uint64(vm.getBlockTimestamp() + 1 days),
+                1,
+                1
+            );
             vm.stopPrank();
         }
     }
@@ -249,7 +314,14 @@ contract SharedNameScopeValidityV4Test is SharedNameRegistryV4TestBase {
     function testSignerAndSubmitterMustRemainDifferent() public {
         vm.expectRevert(IShared.InvalidConfiguration.selector);
         vm.prank(admin);
-        registry.authorizeScope(_authorization(ns, COMMUNITY), grantSigner, 50, uint64(block.timestamp), uint64(block.timestamp + 100), 1);
+        registry.authorizeScope(
+            _authorization(ns, COMMUNITY),
+            grantSigner,
+            50,
+            uint64(vm.getBlockTimestamp()),
+            uint64(vm.getBlockTimestamp() + 100),
+            1
+        );
         vm.prank(admin);
         registry.configurePolicy(ns, submitter, RENEWAL_PRICE, 100);
         assertFalse(registry.quote(ns, COMMUNITY, "member001").issuanceEnabled);
@@ -258,7 +330,14 @@ contract SharedNameScopeValidityV4Test is SharedNameRegistryV4TestBase {
 
     function testNamespaceAuthorizationChangeClosesScopeUntilExplicitAdmission() public {
         vm.prank(admin);
-        registry.attestNamespace(ns, keccak256("changed-hns-authorization"), keccak256("changed-hns-evidence"), uint64(block.timestamp), uint64(block.timestamp + 1 days), true);
+        registry.attestNamespace(
+            ns,
+            keccak256("changed-hns-authorization"),
+            keccak256("changed-hns-evidence"),
+            uint64(vm.getBlockTimestamp()),
+            uint64(vm.getBlockTimestamp() + 1 days),
+            true
+        );
         assertFalse(registry.quote(ns, COMMUNITY, "member001").issuanceEnabled);
         _expectSubmit(IShared.ScopeUnavailable.selector, _claim(ns, "member001"));
         IShared.ScopeAuthorization memory a = _authorization(ns, COMMUNITY);
@@ -266,8 +345,8 @@ contract SharedNameScopeValidityV4Test is SharedNameRegistryV4TestBase {
         a.namespaceAuthorizationRevision = 2;
         vm.expectRevert(IShared.ScopeUnavailable.selector);
         vm.prank(admin);
-        registry.refreshScope(a, uint64(block.timestamp), uint64(block.timestamp + 1800), 1);
-        _authorize(a, 50, uint64(block.timestamp + 1800));
+        registry.refreshScope(a, uint64(vm.getBlockTimestamp()), uint64(vm.getBlockTimestamp() + 1800), 1);
+        _authorize(a, 50, uint64(vm.getBlockTimestamp() + 1800));
         assertEq(registry.ownerOf(_issue("member001")), holder);
     }
 
@@ -280,31 +359,43 @@ contract SharedNameScopeValidityV4Test is SharedNameRegistryV4TestBase {
 
     function testScopeCannotBypassRequiredNamespaceMigration() public {
         bytes32 migrating = _namespace("migrating", true);
-        _expectAuthorize(IShared.MigrationRequired.selector, _authorization(migrating, COMMUNITY), 50, uint64(block.timestamp + 100));
+        _expectAuthorize(
+            IShared.MigrationRequired.selector,
+            _authorization(migrating, COMMUNITY),
+            50,
+            uint64(vm.getBlockTimestamp() + 100)
+        );
         _expectSubmit(IShared.MigrationRequired.selector, _claim(migrating, "member001"));
         assertFalse(registry.quote(migrating, COMMUNITY, "member001").issuanceEnabled);
     }
 
     function testLifetimeCapsSurviveRefreshRevocationAndReauthorization() public {
-        _authorize(_authorization(ns, COMMUNITY), 1, uint64(block.timestamp + 1800));
+        _authorize(_authorization(ns, COMMUNITY), 1, uint64(vm.getBlockTimestamp() + 1800));
         _issue("member001");
-        vm.warp(block.timestamp + 1);
+        vm.warp(vm.getBlockTimestamp() + 1);
         uint64 rev = registry.scope(ns, COMMUNITY).revision;
         vm.prank(admin);
-        registry.refreshScope(_authorization(ns, COMMUNITY), uint64(block.timestamp), uint64(block.timestamp + 1800), rev);
+        registry.refreshScope(
+            _authorization(ns, COMMUNITY), uint64(vm.getBlockTimestamp()), uint64(vm.getBlockTimestamp() + 1800), rev
+        );
         vm.prank(admin);
         registry.revokeScope(ns, COMMUNITY, rev);
-        _authorize(_authorization(ns, COMMUNITY), 1, uint64(block.timestamp + 1800));
+        _authorize(_authorization(ns, COMMUNITY), 1, uint64(vm.getBlockTimestamp() + 1800));
         assertEq(registry.scope(ns, COMMUNITY).totalClaims, 1);
         assertFalse(registry.quote(ns, COMMUNITY, "member002").issuanceEnabled);
         _expectSubmit(IShared.IssuanceLimit.selector, _claim(ns, "member002"));
-        _expectAuthorize(IShared.InvalidConfiguration.selector, _authorization(ns, COMMUNITY), 0, uint64(block.timestamp + 1800));
+        _expectAuthorize(
+            IShared.InvalidConfiguration.selector,
+            _authorization(ns, COMMUNITY),
+            0,
+            uint64(vm.getBlockTimestamp() + 1800)
+        );
     }
 
     function testNamespaceCapRemainsSharedAcrossAuthorizedCommunities() public {
         vm.prank(admin);
         registry.configurePolicy(ns, grantSigner, RENEWAL_PRICE, 1);
-        _authorize(_authorization(ns, OTHER), 2, uint64(block.timestamp + 1800));
+        _authorize(_authorization(ns, OTHER), 2, uint64(vm.getBlockTimestamp() + 1800));
         _issue("member001");
         IShared.FreeClaim memory c = _claim(ns, "member002");
         c.communityId = OTHER;
@@ -316,20 +407,53 @@ contract SharedNameScopeValidityV4Test is SharedNameRegistryV4TestBase {
     function testActivationEventAndStaleActivationRefusal() public {
         IShared.ScopeAuthorization memory a = _authorization(ns, OTHER);
         vm.expectEmit(true, true, true, true, address(registry));
-        emit ScopeAuthorized(ns, OTHER, registry.scopeAuthorizationHash(a), a, submitter, 2, uint64(block.timestamp), uint64(block.timestamp + 100), 1);
-        _authorize(a, 2, uint64(block.timestamp + 100));
+        emit ScopeAuthorized(
+            ns,
+            OTHER,
+            registry.scopeAuthorizationHash(a),
+            a,
+            submitter,
+            2,
+            uint64(vm.getBlockTimestamp()),
+            uint64(vm.getBlockTimestamp() + 100),
+            1
+        );
+        _authorize(a, 2, uint64(vm.getBlockTimestamp() + 100));
         vm.expectRevert(IShared.RevisionMismatch.selector);
         vm.prank(admin);
-        registry.authorizeScope(a, submitter, 2, uint64(block.timestamp), uint64(block.timestamp + 100), 0);
+        registry.authorizeScope(
+            a, submitter, 2, uint64(vm.getBlockTimestamp()), uint64(vm.getBlockTimestamp() + 100), 0
+        );
     }
 
     function testAuthorizationDigestBindsChainContractAndEveryField() public {
         IShared.ScopeAuthorization memory a = _authorization(ns, COMMUNITY);
-        bytes32 expected = keccak256(abi.encodePacked(
-            hex"1901",
-            keccak256(abi.encode(keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"), keccak256("PirateSharedNames"), keccak256("4"), block.chainid, address(registry))),
-            keccak256(abi.encode(registry.SCOPE_AUTHORIZATION_TYPEHASH(), a.namespaceId, a.communityId, a.installationId, a.controller, a.namespaceAuthorizationHash, a.namespaceAuthorizationRevision, a.evidenceHash))
-        ));
+        bytes32 expected = keccak256(
+            abi.encodePacked(
+                hex"1901",
+                keccak256(
+                    abi.encode(
+                        keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+                        keccak256("PirateSharedNames"),
+                        keccak256("4"),
+                        block.chainid,
+                        address(registry)
+                    )
+                ),
+                keccak256(
+                    abi.encode(
+                        registry.SCOPE_AUTHORIZATION_TYPEHASH(),
+                        a.namespaceId,
+                        a.communityId,
+                        a.installationId,
+                        a.controller,
+                        a.namespaceAuthorizationHash,
+                        a.namespaceAuthorizationRevision,
+                        a.evidenceHash
+                    )
+                )
+            )
+        );
         assertEq(registry.scopeAuthorizationHash(a), expected);
         for (uint256 field; field < 7; ++field) {
             IShared.ScopeAuthorization memory changed = _authorization(ns, COMMUNITY);
@@ -348,22 +472,48 @@ contract SharedNameScopeValidityV4Test is SharedNameRegistryV4TestBase {
 
     function testIssuerAndNestedConsentHashMatchIndependentV4Encoding() public view {
         IShared.FreeClaim memory c = _claimView();
-        bytes32 domainHash = keccak256(abi.encode(
-            keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
-            keccak256("PirateSharedNames"), keccak256("4"), block.chainid, address(registry)
-        ));
-        bytes memory identity = abi.encode(registry.CLAIM_TYPEHASH(), c.requestId, c.communityId,
-            c.namespaceId, keccak256(bytes(c.label)), c.recipient);
-        bytes memory terms = abi.encode(c.generation, c.authorityRevision, c.policyRevision,
-            c.scopeRevision, c.scopeAuthorizationHash, c.issuedAt, c.deadline, c.years_, c.maxCost);
+        bytes32 domainHash = keccak256(
+            abi.encode(
+                keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+                keccak256("PirateSharedNames"),
+                keccak256("4"),
+                block.chainid,
+                address(registry)
+            )
+        );
+        bytes memory identity = abi.encode(
+            registry.CLAIM_TYPEHASH(), c.requestId, c.communityId, c.namespaceId, keccak256(bytes(c.label)), c.recipient
+        );
+        bytes memory terms = abi.encode(
+            c.generation,
+            c.authorityRevision,
+            c.policyRevision,
+            c.scopeRevision,
+            c.scopeAuthorizationHash,
+            c.issuedAt,
+            c.deadline,
+            c.years_,
+            c.maxCost
+        );
         bytes32 structHash = keccak256(bytes.concat(identity, terms));
         assertEq(registry.requestHash(c), keccak256(abi.encodePacked(hex"1901", domainHash, structHash)));
-        assertEq(registry.recipientAcceptanceHash(c), keccak256(abi.encodePacked(hex"1901", domainHash,
-            keccak256(abi.encode(registry.ACCEPTANCE_TYPEHASH(), structHash)))));
-        bytes32 otherDomain = keccak256(abi.encode(
-            keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
-            keccak256("PirateSharedNames"), keccak256("4"), block.chainid, stranger
-        ));
+        assertEq(
+            registry.recipientAcceptanceHash(c),
+            keccak256(
+                abi.encodePacked(
+                    hex"1901", domainHash, keccak256(abi.encode(registry.ACCEPTANCE_TYPEHASH(), structHash))
+                )
+            )
+        );
+        bytes32 otherDomain = keccak256(
+            abi.encode(
+                keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+                keccak256("PirateSharedNames"),
+                keccak256("4"),
+                block.chainid,
+                stranger
+            )
+        );
         assertNotEq(registry.requestHash(c), keccak256(abi.encodePacked(hex"1901", otherDomain, structHash)));
     }
 
@@ -379,8 +529,8 @@ contract SharedNameScopeValidityV4Test is SharedNameRegistryV4TestBase {
         c.policyRevision = q.policyRevision;
         c.scopeRevision = q.scopeRevision;
         c.scopeAuthorizationHash = q.scopeAuthorizationHash;
-        c.issuedAt = uint64(block.timestamp);
-        c.deadline = uint64(block.timestamp + 100);
+        c.issuedAt = uint64(vm.getBlockTimestamp());
+        c.deadline = uint64(vm.getBlockTimestamp() + 100);
         c.years_ = 1;
         c.maxCost = 0;
     }
@@ -397,7 +547,7 @@ contract SharedNameScopeValidityV4Test is SharedNameRegistryV4TestBase {
         registry.transferFrom(holder, stranger, id);
         uint256 priorExpiry = registry.expiresAt(id);
         vm.prank(holder);
-        registry.renew(id, 1, RENEWAL_PRICE, block.timestamp);
+        registry.renew(id, 1, RENEWAL_PRICE, vm.getBlockTimestamp());
         assertEq(registry.ownerOf(id), stranger);
         assertEq(registry.record(id, bytes32(uint256(1))), hex"1234");
         assertEq(registry.lockedRenewalPrice(id), RENEWAL_PRICE);
@@ -411,7 +561,7 @@ contract SharedNameScopeValidityV4Test is SharedNameRegistryV4TestBase {
     function testAuthorizedCommunitiesShareUniquenessAndRetainOriginalReceiptAfterRelease() public {
         IShared.FreeClaim memory original = _claim(ns, "member001");
         uint256 oldId = _submit(original);
-        _authorize(_authorization(ns, OTHER), 2, uint64(block.timestamp + 1800));
+        _authorize(_authorization(ns, OTHER), 2, uint64(vm.getBlockTimestamp() + 1800));
         IShared.FreeClaim memory next = _claim(ns, "member001");
         next.communityId = OTHER;
         next.scopeRevision = registry.scope(ns, OTHER).revision;
@@ -420,10 +570,17 @@ contract SharedNameScopeValidityV4Test is SharedNameRegistryV4TestBase {
         vm.warp(uint256(registry.expiresAt(oldId)) + 30 days);
         assertEq(uint256(registry.status(oldId)), uint256(IShared.Status.Released));
         vm.prank(admin);
-        registry.attestNamespace(ns, keccak256("fixture-hns-authorization"), keccak256("fixture-hns-proof"), uint64(block.timestamp), uint64(block.timestamp + 1 days), true);
+        registry.attestNamespace(
+            ns,
+            keccak256("fixture-hns-authorization"),
+            keccak256("fixture-hns-proof"),
+            uint64(vm.getBlockTimestamp()),
+            uint64(vm.getBlockTimestamp() + 1 days),
+            true
+        );
         IShared.ScopeAuthorization memory readmitted = _authorization(ns, OTHER);
         readmitted.namespaceAuthorizationRevision = 2;
-        _authorize(readmitted, 2, uint64(block.timestamp + 1800));
+        _authorize(readmitted, 2, uint64(vm.getBlockTimestamp() + 1800));
         next = _claim(ns, "member001");
         next.communityId = OTHER;
         next.scopeRevision = registry.scope(ns, OTHER).revision;
@@ -444,15 +601,28 @@ contract SharedNameScopeValidityV4Test is SharedNameRegistryV4TestBase {
         (bytes memory grant, bytes memory consent) = _signatures(c);
         IShared.Authority memory before_ = registry.authority(ns);
         IShared.Scope memory scopeBefore = registry.scope(ns, COMMUNITY);
-        vm.warp(block.timestamp + 10);
+        vm.warp(vm.getBlockTimestamp() + 10);
         vm.expectEmit(true, false, false, true, address(registry));
         emit IShared.AuthorityAttested(
-            ns, before_.authorizationHash, keccak256("new-observation"), uint64(block.timestamp),
-            uint64(block.timestamp + 1 days), before_.revision, before_.freshnessVersion + 1, true
+            ns,
+            before_.authorizationHash,
+            keccak256("new-observation"),
+            uint64(vm.getBlockTimestamp()),
+            uint64(vm.getBlockTimestamp() + 1 days),
+            before_.revision,
+            before_.freshnessVersion + 1,
+            true
         );
         vm.prank(admin);
-        registry.refreshNamespace(ns, before_.authorizationHash, keccak256("new-observation"),
-            uint64(block.timestamp), uint64(block.timestamp + 1 days), before_.revision, before_.freshnessVersion);
+        registry.refreshNamespace(
+            ns,
+            before_.authorizationHash,
+            keccak256("new-observation"),
+            uint64(vm.getBlockTimestamp()),
+            uint64(vm.getBlockTimestamp() + 1 days),
+            before_.revision,
+            before_.freshnessVersion
+        );
         IShared.Authority memory after_ = registry.authority(ns);
         assertEq(after_.revision, before_.revision);
         assertEq(after_.authorizationHash, before_.authorizationHash);
@@ -477,9 +647,18 @@ contract SharedNameScopeValidityV4Test is SharedNameRegistryV4TestBase {
         (bytes memory grant, bytes memory consent) = _signatures(c);
         vm.warp(uint256(c.deadline) + 1);
         vm.startPrank(admin);
-        registry.refreshNamespace(ns, keccak256("fixture-hns-authorization"), keccak256("next-proof"),
-            uint64(block.timestamp), uint64(block.timestamp + 1 days), 1, 1);
-        registry.refreshScope(_authorization(ns, COMMUNITY), uint64(block.timestamp), uint64(block.timestamp + 1800), 1);
+        registry.refreshNamespace(
+            ns,
+            keccak256("fixture-hns-authorization"),
+            keccak256("next-proof"),
+            uint64(vm.getBlockTimestamp()),
+            uint64(vm.getBlockTimestamp() + 1 days),
+            1,
+            1
+        );
+        registry.refreshScope(
+            _authorization(ns, COMMUNITY), uint64(vm.getBlockTimestamp()), uint64(vm.getBlockTimestamp() + 1800), 1
+        );
         vm.stopPrank();
         assertTrue(registry.quote(ns, COMMUNITY, c.label).issuanceEnabled);
         vm.expectRevert(IShared.GrantExpired.selector);
@@ -492,37 +671,68 @@ contract SharedNameScopeValidityV4Test is SharedNameRegistryV4TestBase {
         IShared.FreeClaim memory c = _claim(ns, "member001");
         vm.warp(registry.scope(ns, COMMUNITY).validUntil);
         vm.prank(admin);
-        registry.refreshNamespace(ns, keccak256("fixture-hns-authorization"), keccak256("next-proof"),
-            uint64(block.timestamp), uint64(block.timestamp + 1 days), 1, 1);
+        registry.refreshNamespace(
+            ns,
+            keccak256("fixture-hns-authorization"),
+            keccak256("next-proof"),
+            uint64(vm.getBlockTimestamp()),
+            uint64(vm.getBlockTimestamp() + 1 days),
+            1,
+            1
+        );
         assertFalse(registry.quote(ns, COMMUNITY, c.label).issuanceEnabled);
         vm.expectRevert(IShared.ScopeUnavailable.selector);
         vm.prank(admin);
-        registry.refreshScope(_authorization(ns, COMMUNITY), uint64(block.timestamp), uint64(block.timestamp + 1800), 1);
+        registry.refreshScope(
+            _authorization(ns, COMMUNITY), uint64(vm.getBlockTimestamp()), uint64(vm.getBlockTimestamp() + 1800), 1
+        );
         _expectSubmit(IShared.ScopeUnavailable.selector, c);
     }
 
     function testExpiredNamespaceCannotRefreshAndReadmissionDoesNotReviveOldGrant() public {
         bytes32 binding = keccak256("fixture-hns-authorization");
         vm.prank(admin);
-        registry.attestNamespace(ns, binding, keccak256("fixture-hns-proof"), uint64(block.timestamp), uint64(block.timestamp + 100), true);
+        registry.attestNamespace(
+            ns,
+            binding,
+            keccak256("fixture-hns-proof"),
+            uint64(vm.getBlockTimestamp()),
+            uint64(vm.getBlockTimestamp() + 100),
+            true
+        );
         IShared.ScopeAuthorization memory a = _authorization(ns, COMMUNITY);
         a.namespaceAuthorizationRevision = 2;
-        _authorize(a, 50, uint64(block.timestamp + 100));
+        _authorize(a, 50, uint64(vm.getBlockTimestamp() + 100));
         IShared.FreeClaim memory c = _claim(ns, "member001");
-        c.deadline = uint64(block.timestamp + 100);
+        c.deadline = uint64(vm.getBlockTimestamp() + 100);
         vm.warp(c.deadline);
         vm.expectRevert(IShared.AuthorityUnavailable.selector);
         vm.prank(admin);
-        registry.refreshNamespace(ns, binding, keccak256("next-proof"), uint64(block.timestamp), uint64(block.timestamp + 1 days), 2, 2);
+        registry.refreshNamespace(
+            ns,
+            binding,
+            keccak256("next-proof"),
+            uint64(vm.getBlockTimestamp()),
+            uint64(vm.getBlockTimestamp() + 1 days),
+            2,
+            2
+        );
         vm.prank(admin);
-        registry.attestNamespace(ns, binding, keccak256("next-proof"), uint64(block.timestamp), uint64(block.timestamp + 1 days), true);
+        registry.attestNamespace(
+            ns,
+            binding,
+            keccak256("next-proof"),
+            uint64(vm.getBlockTimestamp()),
+            uint64(vm.getBlockTimestamp() + 1 days),
+            true
+        );
         assertEq(registry.authority(ns).revision, 3);
         assertFalse(registry.quote(ns, COMMUNITY, c.label).issuanceEnabled);
         a.namespaceAuthorizationRevision = 3;
         vm.expectRevert(IShared.ScopeUnavailable.selector);
         vm.prank(admin);
-        registry.refreshScope(a, uint64(block.timestamp), uint64(block.timestamp + 1800), 2);
-        _authorize(a, 50, uint64(block.timestamp + 1800));
+        registry.refreshScope(a, uint64(vm.getBlockTimestamp()), uint64(vm.getBlockTimestamp() + 1800), 2);
+        _authorize(a, 50, uint64(vm.getBlockTimestamp() + 1800));
         _expectSubmit(IShared.RevisionMismatch.selector, c);
     }
 
@@ -530,11 +740,18 @@ contract SharedNameScopeValidityV4Test is SharedNameRegistryV4TestBase {
         IShared.FreeClaim memory c = _claim(ns, "member001");
         vm.prank(admin);
         registry.setNamespaceIssuance(ns, false);
-        vm.warp(block.timestamp + 1);
+        vm.warp(vm.getBlockTimestamp() + 1);
         vm.expectRevert(IShared.AuthorityUnavailable.selector);
         vm.prank(admin);
-        registry.refreshNamespace(ns, keccak256("fixture-hns-authorization"), keccak256("next-proof"),
-            uint64(block.timestamp), uint64(block.timestamp + 1 days), 2, 1);
+        registry.refreshNamespace(
+            ns,
+            keccak256("fixture-hns-authorization"),
+            keccak256("next-proof"),
+            uint64(vm.getBlockTimestamp()),
+            uint64(vm.getBlockTimestamp() + 1 days),
+            2,
+            1
+        );
         vm.prank(admin);
         registry.setNamespaceIssuance(ns, true);
         assertEq(registry.authority(ns).revision, 3);
@@ -543,16 +760,30 @@ contract SharedNameScopeValidityV4Test is SharedNameRegistryV4TestBase {
         a.namespaceAuthorizationRevision = 3;
         vm.expectRevert(IShared.ScopeUnavailable.selector);
         vm.prank(admin);
-        registry.refreshScope(a, uint64(block.timestamp), uint64(block.timestamp + 1800), 1);
-        _authorize(a, 50, uint64(block.timestamp + 1800));
+        registry.refreshScope(a, uint64(vm.getBlockTimestamp()), uint64(vm.getBlockTimestamp() + 1800), 1);
+        _authorize(a, 50, uint64(vm.getBlockTimestamp() + 1800));
         _expectSubmit(IShared.RevisionMismatch.selector, c);
     }
 
     function testNamespaceOwnershipEpochReturningToSameHashCannotRestoreScope() public {
         IShared.FreeClaim memory c = _claim(ns, "member001");
         vm.startPrank(admin);
-        registry.attestNamespace(ns, keccak256("different-owner"), keccak256("proof-two"), uint64(block.timestamp), uint64(block.timestamp + 1 days), true);
-        registry.attestNamespace(ns, keccak256("fixture-hns-authorization"), keccak256("proof-three"), uint64(block.timestamp), uint64(block.timestamp + 1 days), true);
+        registry.attestNamespace(
+            ns,
+            keccak256("different-owner"),
+            keccak256("proof-two"),
+            uint64(vm.getBlockTimestamp()),
+            uint64(vm.getBlockTimestamp() + 1 days),
+            true
+        );
+        registry.attestNamespace(
+            ns,
+            keccak256("fixture-hns-authorization"),
+            keccak256("proof-three"),
+            uint64(vm.getBlockTimestamp()),
+            uint64(vm.getBlockTimestamp() + 1 days),
+            true
+        );
         vm.stopPrank();
         assertEq(registry.authority(ns).revision, 3);
         assertEq(registry.scope(ns, COMMUNITY).namespaceAuthorizationRevision, 1);
@@ -560,7 +791,7 @@ contract SharedNameScopeValidityV4Test is SharedNameRegistryV4TestBase {
         _expectSubmit(IShared.ScopeUnavailable.selector, c);
         IShared.ScopeAuthorization memory current = _authorization(ns, COMMUNITY);
         current.namespaceAuthorizationRevision = 3;
-        _authorize(current, 50, uint64(block.timestamp + 1800));
+        _authorize(current, 50, uint64(vm.getBlockTimestamp() + 1800));
         _expectSubmit(IShared.RevisionMismatch.selector, c);
     }
 
@@ -569,18 +800,42 @@ contract SharedNameScopeValidityV4Test is SharedNameRegistryV4TestBase {
         vm.startPrank(admin);
         vm.expectRevert(IShared.InvalidConfiguration.selector);
         registry.refreshNamespace(ns, a.authorizationHash, a.evidenceHash, a.observedAt, a.validUntil, 1, 1);
-        vm.warp(block.timestamp + 1);
+        vm.warp(vm.getBlockTimestamp() + 1);
         vm.expectRevert(IShared.InvalidConfiguration.selector);
-        registry.refreshNamespace(ns, keccak256("other-binding"), a.evidenceHash, uint64(block.timestamp), a.validUntil, 1, 1);
+        registry.refreshNamespace(
+            ns, keccak256("other-binding"), a.evidenceHash, uint64(vm.getBlockTimestamp()), a.validUntil, 1, 1
+        );
         vm.expectRevert(IShared.InvalidConfiguration.selector);
-        registry.refreshNamespace(ns, a.authorizationHash, bytes32(0), uint64(block.timestamp), a.validUntil, 1, 1);
+        registry.refreshNamespace(
+            ns, a.authorizationHash, bytes32(0), uint64(vm.getBlockTimestamp()), a.validUntil, 1, 1
+        );
         vm.expectRevert(IShared.InvalidConfiguration.selector);
-        registry.refreshNamespace(ns, a.authorizationHash, a.evidenceHash, uint64(block.timestamp + 1), a.validUntil, 1, 1);
+        registry.refreshNamespace(
+            ns, a.authorizationHash, a.evidenceHash, uint64(vm.getBlockTimestamp() + 1), a.validUntil, 1, 1
+        );
         vm.expectRevert(IShared.InvalidConfiguration.selector);
-        registry.refreshNamespace(ns, a.authorizationHash, a.evidenceHash, uint64(block.timestamp), a.validUntil - 1, 1, 1);
+        registry.refreshNamespace(
+            ns, a.authorizationHash, a.evidenceHash, uint64(vm.getBlockTimestamp()), a.validUntil - 1, 1, 1
+        );
         vm.expectRevert(IShared.InvalidConfiguration.selector);
-        registry.refreshNamespace(ns, a.authorizationHash, a.evidenceHash, uint64(block.timestamp), uint64(block.timestamp + 1 days + 1), 1, 1);
-        registry.refreshNamespace(ns, a.authorizationHash, a.evidenceHash, uint64(block.timestamp), uint64(block.timestamp + 1 days), 1, 1);
+        registry.refreshNamespace(
+            ns,
+            a.authorizationHash,
+            a.evidenceHash,
+            uint64(vm.getBlockTimestamp()),
+            uint64(vm.getBlockTimestamp() + 1 days + 1),
+            1,
+            1
+        );
+        registry.refreshNamespace(
+            ns,
+            a.authorizationHash,
+            a.evidenceHash,
+            uint64(vm.getBlockTimestamp()),
+            uint64(vm.getBlockTimestamp() + 1 days),
+            1,
+            1
+        );
         vm.stopPrank();
         assertEq(registry.authority(ns).revision, 1);
         assertEq(registry.authority(ns).freshnessVersion, 2);
@@ -588,14 +843,38 @@ contract SharedNameScopeValidityV4Test is SharedNameRegistryV4TestBase {
 
     function testNamespaceRefreshCASRejectsStaleEpochAndObservationVersion() public {
         IShared.Authority memory a = registry.authority(ns);
-        vm.warp(block.timestamp + 1);
+        vm.warp(vm.getBlockTimestamp() + 1);
         vm.startPrank(admin);
         vm.expectRevert(IShared.RevisionMismatch.selector);
-        registry.refreshNamespace(ns, a.authorizationHash, a.evidenceHash, uint64(block.timestamp), uint64(block.timestamp + 1 days), 0, 1);
-        registry.refreshNamespace(ns, a.authorizationHash, a.evidenceHash, uint64(block.timestamp), uint64(block.timestamp + 1 days), 1, 1);
-        vm.warp(block.timestamp + 1);
+        registry.refreshNamespace(
+            ns,
+            a.authorizationHash,
+            a.evidenceHash,
+            uint64(vm.getBlockTimestamp()),
+            uint64(vm.getBlockTimestamp() + 1 days),
+            0,
+            1
+        );
+        registry.refreshNamespace(
+            ns,
+            a.authorizationHash,
+            a.evidenceHash,
+            uint64(vm.getBlockTimestamp()),
+            uint64(vm.getBlockTimestamp() + 1 days),
+            1,
+            1
+        );
+        vm.warp(vm.getBlockTimestamp() + 1);
         vm.expectRevert(IShared.RevisionMismatch.selector);
-        registry.refreshNamespace(ns, a.authorizationHash, keccak256("newer-proof"), uint64(block.timestamp), uint64(block.timestamp + 1 days), 1, 1);
+        registry.refreshNamespace(
+            ns,
+            a.authorizationHash,
+            keccak256("newer-proof"),
+            uint64(vm.getBlockTimestamp()),
+            uint64(vm.getBlockTimestamp() + 1 days),
+            1,
+            1
+        );
         vm.stopPrank();
         assertEq(registry.authority(ns).freshnessVersion, 2);
         assertEq(registry.authority(ns).evidenceHash, a.evidenceHash);
@@ -606,11 +885,27 @@ contract SharedNameScopeValidityV4Test is SharedNameRegistryV4TestBase {
         bytes32 pending = registry.registerNamespace("pendingtld", false);
         vm.expectRevert(IShared.AuthorityUnavailable.selector);
         vm.prank(admin);
-        registry.refreshNamespace(pending, keccak256("binding"), keccak256("proof"), uint64(block.timestamp), uint64(block.timestamp + 100), 0, 0);
+        registry.refreshNamespace(
+            pending,
+            keccak256("binding"),
+            keccak256("proof"),
+            uint64(vm.getBlockTimestamp()),
+            uint64(vm.getBlockTimestamp() + 100),
+            0,
+            0
+        );
         bytes32 migrating = _namespace("migrating", true);
         vm.expectRevert(IShared.MigrationRequired.selector);
         vm.prank(admin);
-        registry.refreshNamespace(migrating, keccak256("fixture-hns-authorization"), keccak256("proof"), uint64(block.timestamp), uint64(block.timestamp + 100), 1, 1);
+        registry.refreshNamespace(
+            migrating,
+            keccak256("fixture-hns-authorization"),
+            keccak256("proof"),
+            uint64(vm.getBlockTimestamp()),
+            uint64(vm.getBlockTimestamp() + 100),
+            1,
+            1
+        );
         assertFalse(registry.authority(pending).issuanceEnabled);
         assertEq(registry.authority(pending).revision, 0);
     }
@@ -633,11 +928,17 @@ contract SharedNameScopeValidityV4Test is SharedNameRegistryV4TestBase {
         assertEq(uint256(registry.status(oldId)), uint256(IShared.Status.Released));
         assertEq(registry.tokenURI(oldId), "");
         vm.prank(admin);
-        registry.attestNamespace(ns, keccak256("fixture-hns-authorization"), keccak256("fixture-hns-proof"),
-            uint64(block.timestamp), uint64(block.timestamp + 1 days), true);
+        registry.attestNamespace(
+            ns,
+            keccak256("fixture-hns-authorization"),
+            keccak256("fixture-hns-proof"),
+            uint64(vm.getBlockTimestamp()),
+            uint64(vm.getBlockTimestamp() + 1 days),
+            true
+        );
         IShared.ScopeAuthorization memory a = _authorization(ns, COMMUNITY);
         a.namespaceAuthorizationRevision = 2;
-        _authorize(a, 50, uint64(block.timestamp + 1800));
+        _authorize(a, 50, uint64(vm.getBlockTimestamp() + 1800));
         uint256 currentId = _issue("member001");
         assertEq(registry.tokenURI(currentId), "");
         vm.expectRevert(abi.encodeWithSelector(IERC721Errors.ERC721NonexistentToken.selector, oldId));
@@ -657,8 +958,15 @@ contract SharedNameScopeValidityV4Test is SharedNameRegistryV4TestBase {
     }
 
     function _assertCurrentDomainView() private view {
-        (bytes1 fields, string memory domainName, string memory version, uint256 chainId,
-            address verifyingContract, bytes32 salt, uint256[] memory extensions) = registry.eip712Domain();
+        (
+            bytes1 fields,
+            string memory domainName,
+            string memory version,
+            uint256 chainId,
+            address verifyingContract,
+            bytes32 salt,
+            uint256[] memory extensions
+        ) = registry.eip712Domain();
         assertEq(uint256(uint8(fields)), 15);
         assertEq(domainName, "PirateSharedNames");
         assertEq(version, "4");
@@ -675,7 +983,7 @@ contract SharedNameScopeValidityV4Test is SharedNameRegistryV4TestBase {
         vm.warp(registry.expiresAt(id) + 1);
         assertEq(uint256(registry.status(id)), uint256(IShared.Status.Grace));
         vm.prank(stranger);
-        registry.renew(id, 1, 0, block.timestamp);
+        registry.renew(id, 1, 0, vm.getBlockTimestamp());
         assertEq(uint256(registry.status(id)), uint256(IShared.Status.Active));
         assertEq(registry.ownerOf(id), holder);
     }
