@@ -68,13 +68,33 @@ jobs:
       - name: Install packages
         run: npm ci
 
+      - name: Regenerate shared ABI and independent identity vectors
+        run: |
+          npm run gen:shared-abi
+          forge fmt test/shared/SharedNameKeys.t.sol
+          git diff --exit-code -- packages/resolver/src/shared-abi.ts packages/resolver/abi/shared-name-registry-v3.json packages/resolver/test/shared-keys.test.ts test/shared/SharedNameKeys.t.sol
+          test -f packages/resolver/src/shared-abi.ts
+          test -f packages/resolver/abi/shared-name-registry-v3.json
+          test -z "$(git ls-files --others --exclude-standard -- packages/resolver/src/shared-abi.ts packages/resolver/abi/shared-name-registry-v3.json)"
+
       - name: Type-check and unit-test the resolver and SDK
         run: |
           npm run typecheck
           npm run test:ts
+          node --test packages/sdk/test/shared-*.test.ts
 
       - name: Build hnsd for regtest
         run: docker build -t pirate-registry-hnsd:v2.0.0-regtest harness/hnsd
 
       - name: Local acceptance (anvil, hsd regtest, hnsd)
         run: node harness/acceptance.ts
+
+      - name: Record isolated CI tool provenance for shared rebuild
+        run: |
+          mkdir -p .ignore/shared-names-registry-20261113
+          node scripts/verify-shared-release.ts \
+            --record-ci-tools .ignore/shared-names-registry-20261113/ci-tools.json \
+            --forge-path "$(command -v forge)" --svm-home "$HOME"
+
+      - name: Shared local acceptance (fresh isolated services)
+        run: npm run acceptance:shared -- --execute-local --start-local --tools .ignore/shared-names-registry-20261113/ci-tools.json

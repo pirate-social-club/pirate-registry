@@ -1,5 +1,41 @@
 # pirate-registry
 
+## Shared names V3 source draft
+
+The new Pirate-managed shared registry is specified in
+[SHARED-NAMES-V3.md](docs/SHARED-NAMES-V3.md), with explicit holder-preserving
+[migration requirements](docs/SHARED-NAMES-MIGRATION-V1.md). It namespaces names
+by canonical TLD and label across communities. Operators receive application
+permissions; Pirate administers the shared contract.
+
+The [contract inventory and cutover boundary](docs/CONTRACTS.md) distinguishes
+this target from retained protocol-2 deployments. At exact source `56d63ad`,
+[CI43452867716](https://github.com/pirate-social-club/pirate-registry/actions/runs/43452867716)
+passes release solc and separate Solar tests, generated ABI byte comparison,
+type checks, all60 resolver/SDK Node cases and shared isolated local acceptance.
+The latter rebuilds committed source and checks full-node/SPV HNS resolution,
+separate signatures, durable transaction recovery, records, transfer and locked
+renewal. The generated ABI contains119 entries with three identity vectors.
+
+This verifies the contract interface for downstream migration work. Application
+membership/grant persistence remains fixture-only. No V3 live deployment,
+admitted live namespace or downstream source selection is claimed. Directory
+and caller migration, holder-preserving migration and actual service integration
+remain required. Live currency, renewal fee, role addresses and finite issuance
+budgets still require explicit configuration.
+
+To reproduce the validation with pinned dependencies and an allocated disposable
+runtime, the order is solc build, `npm run gen:shared-abi`, `npm run typecheck`,
+Foundry tests, `npm run test:shared`, and independent source rebuild/local
+acceptance. `npm run acceptance:shared -- --execute-local --tools APPROVED-TOOLS.json`
+requires separately managed disposable Anvil (31337 on port 18545), hsd regtest
+and hnsd. Local mode does not start or stop services; isolated CI has an explicit
+`--start-local` mode. `npm run verify:shared-release -- --source FILE --rpc URL --tools APPROVED-TOOLS.json`
+verifies an explicit V3 source without updating a deployment manifest.
+`node packages/sdk/src/shared-cli.ts --help` describes the read-only V3 CLI.
+
+## Existing protocol 2 baseline
+
 A permissionless Handshake SLD registry: anyone who controls a Handshake TLD
 can deploy an immutable registry on an EVM chain (MegaETH testnet in this
 release), sell second-level names as ERC-721 tokens for a pinned payment
@@ -90,3 +126,54 @@ code hashes, are always rebuilt with the pinned solc.
 The compiler is pinned to solc 0.8.30 with `evm_version = "cancun"`,
 optimizer 200 runs and no CBOR metadata, so runtime bytecode is reproducible
 from source for the release manifest (SPEC section 7).
+
+## Protocol 3 corrective checkpoint
+
+The audit repair is source-only until allocated generation and verification.
+`docs/SHARED-NAMES-V3.md` revision 4 specifies nested recipient consent,
+observation-bound consumed receipts, separate collection/signing/inclusion budgets and
+durable journal ordering. Renewal sponsorship, locked prices, lifetime issuance
+counters and protocol-2 rights are unchanged. No live fee, role or gas policy is
+selected. Multisig provisioning and payment spending caps remain deferred.
+
+Prepared claims now use `pirate.member-name-claim/3` and expose inclusive
+`submitBy` in Unix seconds. The read-only CLI requires `--collection-margin`,
+`--signing-margin` and `--inclusion-margin`: positive integer seconds totaling
+at most 900. Preparation reserves all three budgets, submission reserves signing
+and inclusion, and broadcast reserves inclusion. These are explicit caller
+inputs, not live defaults. Older envelopes are refused, never silently upgraded
+or reissued. Retain their original journals for matching-version recovery.
+
+The journal helper requires POSIX durable storage and an exclusive caller lease.
+Failed file or directory sync can leave a journal; retain it. `EEXIST` never
+means persistence succeeded, even for identical bytes. The helper refuses retries
+at existing filenames and adds no replay protocol. Any separately admitted
+continuation must validate the original payload/raw/hash and re-sync the file
+and required directories before sending the same original transaction.
+
+Under Root's later allocation: build with the approved solc profile, run
+`npm run gen:shared-abi`, format the admitted Solidity files, then verify both
+generated ABI outputs and the literal vector sections in
+`test/shared/SharedNameKeys.t.sol` and `packages/resolver/test/shared-keys.test.ts`.
+The literal sections deliberately fail until real generation populates them.
+Run the existing V2 gates, `npm run test:shared`, and the shared acceptance gate.
+No generated ABI, fabricated vector or code hash is included in this source turn.
+
+Local acceptance requires disposable Anvil started with
+`anvil --host 127.0.0.1 --port 18545 --chain-id 31337 --slots-in-an-epoch 1 --silent`,
+plus Root-owned hsd/hnsd regtest services. Before deployment/funding the shared
+harness mines three local blocks and requires safe/finalized lag of one/two
+blocks; it never falls back to latest. The owning invocation is
+`npm run acceptance:shared -- --execute-local --tools APPROVED-TOOLS.json`.
+`--start-local` is restricted to an isolated CI runner. Tool JSON must specify
+absolute `forgePath`, `solcPath`, their approved SHA-256 byte pins and exact
+`solcVersion` in canonical `0.8.30+commit.<8 lowercase hex digits>` form. A copied
+platform suffix or newline is refused before rebuild scratch is allocated.
+Full binary version output is retained separately as provenance. Local pins come
+from Root's verified preparation. CI uses `--record-ci-tools` on the release
+verifier to select one executable across `~/.svm` and `~/.local/share/svm`, refusing
+missing or ambiguous installations, then pins its bytes for the archived rebuild.
+CI records installed tool provenance separately; that is not a local release acceptance.
+The release verifier requires `--tools` too and refuses ambient Git/Foundry/Solidity
+override variables. No dependency installation or runtime is authorized by this
+README alone.

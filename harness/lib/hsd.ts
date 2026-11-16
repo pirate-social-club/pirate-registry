@@ -24,6 +24,16 @@ async function rpc<T>(url: string, method: string, params: unknown[] = []): Prom
 export const node = <T>(method: string, params: unknown[] = []) => rpc<T>(REGTEST.nodeRpc, method, params);
 export const wallet = <T>(method: string, params: unknown[] = []) => rpc<T>(REGTEST.walletRpc, method, params);
 
+/** Require the configured local node to identify itself as Handshake regtest. */
+export async function requireRegtestNode(): Promise<void> {
+  // hsd 8 getinfo has no network field; getblockchaininfo identifies the chain.
+  const info = await node<unknown>('getblockchaininfo');
+  if (typeof info !== 'object' || info === null || Array.isArray(info)
+    || !('chain' in info) || info.chain !== 'regtest') {
+    throw new Error('only disposable Handshake regtest allowed (getblockchaininfo.chain must be regtest)');
+  }
+}
+
 let miningAddress: string | undefined;
 export async function mine(blocks: number): Promise<void> {
   miningAddress ??= await wallet<string>('getnewaddress');
